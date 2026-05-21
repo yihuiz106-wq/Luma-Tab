@@ -1,0 +1,642 @@
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from 'react';
+import { MoreHorizontal, Pin, PinOff } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import FaviconImage from './FaviconImage';
+import { getAllBookmarks } from '../lib/bookmarks';
+import { simplifyPageNamesWithDeepSeek } from '../lib/deepseek';
+import {
+  getDeepSeekApiKey,
+  getLastUpdateTime,
+  getPinnedPages,
+  getRawTimeLog,
+  getUrlNameCache,
+  saveLastUpdateTime,
+  savePinnedPages,
+  saveRawTimeLog,
+  saveUrlNameCache
+} from '../lib/storage';
+import type { PinnedPage, TimeLogEntry } from '../types/app';
+
+interface FrequentSite {
+  domain: string;
+  title: string;
+  duration: number;
+  url: string;
+}
+
+const DAILY_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
+
+function buildFrequentSites(entries: TimeLogEntry[]): FrequentSite[] {
+  const threshold = Date.now() - 72 * 60 * 60 * 1000;
+  const recentEntries = entries.filter((entry) => entry.date >= threshold);
+  const grouped = new Map<string, FrequentSite>();
+
+  for (const entry of recentEntries) {
+    const existing = grouped.get(entry.domain);
+
+    if (existing) {
+      existing.duration += entry.duration;
+      continue;
+    }
+
+    grouped.set(entry.domain, {
+      domain: entry.domain,
+      title: entry.title,
+      duration: entry.duration,
+      url: entry.url
+    });
+  }
+
+  return [...grouped.values()].sort((a, b) => b.duration - a.duration).slice(0, 6);
+}
+
+function syncPinnedPagesWithBookmarks(pinnedPages: PinnedPage[], bookmarks: Array<{ id: string; title: string; url: string; sourcePath: string }>) {
+  const bookmarksById = new Map(bookmarks.map((bookmark) => [bookmark.id, bookmark]));
+
+  return pinnedPages.map((item) => {
+    const bookmark = bookmarksById.get(item.id);
+
+    if (!bookmark) {
+      return item;
+    }
+
+    return {
+      ...item,
+      title: bookmark.title,
+      url: bookmark.url,
+      sourcePath: bookmark.sourcePath
+    };
+  });
+}
+
+export default function LeftPanel() {
+  const [pinnedPages, setPinnedPages] = useState<PinnedPage[]>([]);
+  const [frequentSites, setFrequentSites] = useState<FrequentSite[]>([]);
+  const [urlNameCache, setUrlNameCache] = useState<Record<string, string>>({});
+  const [bookmarkTitleByUrl, setBookmarkTitleByUrl] = useState<Record<string, string>>({});
+  const [editingItem, setEditingItem] = useState<{ kind: 'pinned' | 'frequent'; id: string } | null>(null);
+  const [menuState, setMenuState] = useState<{
+    kind: 'pinned' | 'frequent';
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [draftName, setDraftName] = useState('');
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLeftPanel() {
+      const [storedPinnedPages, rawTimeLog, lastUpdateTime, storedUrlNameCache, deepseekApiKey, bookmarks] = await Promise.all([
+        getPinnedPages(),
+        getRawTimeLog(),
+        getLastUpdateTime(),
+        getUrlNameCache(),
+        getDeepSeekApiKey(),
+        getAllBookmarks()
+      ]);
+      const nextFrequentSites = buildFrequentSites(rawTimeLog);
+      const nextBookmarkTitleByUrl = Object.fromEntries(bookmarks.map((bookmark) => [bookmark.url, bookmark.title]));
+
+      if (!isMounted) {
+        return;
+      }
+
+      setPinnedPages(syncPinnedPagesWithBookmarks(storedPinnedPages, bookmarks));
+      setFrequentSites(nextFrequentSites);
+      setUrlNameCache(storedUrlNameCache);
+      setBookmarkTitleByUrl(nextBookmarkTitleByUrl);
+
+      if (Date.now() - lastUpdateTime > DAILY_UPDATE_INTERVAL) {
+        void refreshFrequentSiteNames(nextFrequentSites, storedUrlNameCache, deepseekApiKey);
+      }
+    }
+
+    void loadLeftPanel();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || typeof chrome.bookmarks?.onCreated === 'undefined') {
+      return;
+    }
+
+    const handleBookmarksChanged = async () => {
+      const bookmarks = await getAllBookmarks();
+      const nextBookmarkTitleByUrl = Object.fromEntries(bookmarks.map((bookmark) => [bookmark.url, bookmark.title]));
+
+      setBookmarkTitleByUrl(nextBookmarkTitleByUrl);
+      setPinnedPages((currentPinnedPages) => {
+        const nextPinnedPages = syncPinnedPagesWithBookmarks(currentPinnedPages, bookmarks);
+        void savePinnedPages(nextPinnedPages);
+        return nextPinnedPages;
+      });
+    };
+
+    chrome.bookmarks.onCreated.addListener(handleBookmarksChanged);
+    chrome.bookmarks.onRemoved?.addListener(handleBookmarksChanged);
+    chrome.bookmarks.onChanged?.addListener(handleBookmarksChanged);
+
+    return () => {
+      chrome.bookmarks.onCreated.removeListener(handleBookmarksChanged);
+      chrome.bookmarks.onRemoved?.removeListener(handleBookmarksChanged);
+      chrome.bookmarks.onChanged?.removeListener(handleBookmarksChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!editingItem) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [editingItem]);
+
+  useEffect(() => {
+    if (!menuState) {
+      return;
+    }
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target)) {
+        return;
+      }
+
+      setMenuState(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuState(null);
+      }
+    };
+
+    document.addEventListener('click', handleClick);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('click', handleClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuState]);
+
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || typeof chrome.storage?.onChanged === 'undefined') {
+      return;
+    }
+
+    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
+      if (areaName !== 'local') {
+        return;
+      }
+
+      if (changes.pinnedPages?.newValue && Array.isArray(changes.pinnedPages.newValue)) {
+        setPinnedPages(changes.pinnedPages.newValue as PinnedPage[]);
+      }
+
+      if (changes.urlNameCache?.newValue && typeof changes.urlNameCache.newValue === 'object') {
+        setUrlNameCache(changes.urlNameCache.newValue as Record<string, string>);
+      }
+
+      if (changes.rawTimeLog?.newValue && Array.isArray(changes.rawTimeLog.newValue)) {
+        setFrequentSites(buildFrequentSites(changes.rawTimeLog.newValue as TimeLogEntry[]));
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
+
+  const openBookmark = (url: string) => {
+    window.location.href = url;
+  };
+
+  const refreshFrequentSiteNames = async (
+    nextFrequentSites: FrequentSite[],
+    storedUrlNameCache: Record<string, string>,
+    deepseekApiKey: string
+  ) => {
+    const missingSites = nextFrequentSites
+      .filter((site) => !storedUrlNameCache[site.url])
+      .map((site) => ({
+        title: site.title,
+        url: site.url
+      }));
+
+    if (missingSites.length === 0 || !deepseekApiKey.trim()) {
+      await saveLastUpdateTime(Date.now());
+      return;
+    }
+
+    try {
+      const simplifiedNames = await simplifyPageNamesWithDeepSeek(deepseekApiKey, missingSites);
+
+      if (Object.keys(simplifiedNames).length === 0) {
+        await saveLastUpdateTime(Date.now());
+        return;
+      }
+
+      const nextUrlNameCache = {
+        ...storedUrlNameCache,
+        ...simplifiedNames
+      };
+
+      setUrlNameCache(nextUrlNameCache);
+      setPinnedPages((currentPinnedPages) =>
+        currentPinnedPages.map((item) => ({
+          ...item,
+          customName: nextUrlNameCache[item.url] ?? item.customName
+        }))
+      );
+
+      await Promise.all([saveUrlNameCache(nextUrlNameCache), saveLastUpdateTime(Date.now())]);
+    } catch {
+      await saveLastUpdateTime(Date.now());
+    }
+  };
+
+  const handleUnpin = async (bookmarkId: string) => {
+    const nextPinnedPages = pinnedPages.filter((item) => item.id !== bookmarkId);
+    setPinnedPages(nextPinnedPages);
+    await savePinnedPages(nextPinnedPages);
+  };
+
+  const handlePinFrequentSite = async (site: FrequentSite) => {
+    if (pinnedPages.some((item) => item.url === site.url)) {
+      return;
+    }
+
+    const nextPinnedPages: PinnedPage[] = [
+      {
+        id: `pinned-${site.domain}`,
+        title: site.title,
+        url: site.url,
+        sourcePath: site.domain,
+        customName: urlNameCache[site.url]
+      },
+      ...pinnedPages
+    ];
+
+    setPinnedPages(nextPinnedPages);
+    await savePinnedPages(nextPinnedPages);
+  };
+
+  const startEditing = (kind: 'pinned' | 'frequent', id: string, currentName: string) => {
+    setEditingItem({ kind, id });
+    setDraftName(currentName);
+  };
+
+  const stopEditing = () => {
+    setEditingItem(null);
+    setDraftName('');
+  };
+
+  const openActionMenu = (event: React.MouseEvent<HTMLElement>, kind: 'pinned' | 'frequent', id: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const menuWidth = 148;
+    const viewportPadding = 12;
+    const left = Math.min(
+      window.innerWidth - menuWidth - viewportPadding,
+      Math.max(viewportPadding, event.clientX)
+    );
+    const top = Math.min(window.innerHeight - 120, event.clientY);
+
+    setMenuState((current) =>
+      current?.kind === kind && current.id === id
+        ? null
+        : {
+            kind,
+            id,
+            x: left,
+            y: top
+          }
+    );
+  };
+
+  const savePinnedCustomName = async (bookmarkId: string, nextName: string) => {
+    const target = pinnedPages.find((item) => item.id === bookmarkId);
+
+    if (!target) {
+      stopEditing();
+      return;
+    }
+
+    const trimmedName = nextName.trim();
+    const nextPinnedPages = pinnedPages.map((item) =>
+      item.id === bookmarkId
+        ? {
+            ...item,
+            customName: trimmedName || undefined
+          }
+        : item
+    );
+    const nextUrlNameCache = {
+      ...urlNameCache
+    };
+
+    if (trimmedName) {
+      nextUrlNameCache[target.url] = trimmedName;
+    } else {
+      delete nextUrlNameCache[target.url];
+    }
+
+    setPinnedPages(nextPinnedPages);
+    setUrlNameCache(nextUrlNameCache);
+    await Promise.all([savePinnedPages(nextPinnedPages), saveUrlNameCache(nextUrlNameCache)]);
+    stopEditing();
+  };
+
+  const saveFrequentCustomName = async (site: FrequentSite, nextName: string) => {
+    const trimmedName = nextName.trim();
+    const nextUrlNameCache = {
+      ...urlNameCache
+    };
+
+    if (trimmedName) {
+      nextUrlNameCache[site.url] = trimmedName;
+    } else {
+      delete nextUrlNameCache[site.url];
+    }
+
+    setUrlNameCache(nextUrlNameCache);
+    await saveUrlNameCache(nextUrlNameCache);
+    stopEditing();
+  };
+
+  const deleteFrequentSite = async (site: FrequentSite) => {
+    const rawTimeLog = await getRawTimeLog();
+    const nextRawTimeLog = rawTimeLog.filter((entry) => entry.url !== site.url && entry.domain !== site.domain);
+    const nextFrequentSites = buildFrequentSites(nextRawTimeLog);
+
+    setFrequentSites(nextFrequentSites);
+    await saveRawTimeLog(nextRawTimeLog);
+    stopEditing();
+  };
+
+  const handleEditKeyDown = (
+    event: ReactKeyboardEvent<HTMLInputElement>,
+    saveAction: () => Promise<void>
+  ) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void saveAction();
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      stopEditing();
+    }
+  };
+
+  const getPinnedDisplayName = (title: string, url: string, customName?: string) =>
+    customName || urlNameCache[url] || bookmarkTitleByUrl[url] || title;
+
+  const getFrequentDisplayName = (site: FrequentSite) => {
+    if (urlNameCache[site.url]) {
+      return urlNameCache[site.url];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(bookmarkTitleByUrl, site.url)) {
+      return bookmarkTitleByUrl[site.url];
+    }
+
+    return site.title;
+  };
+
+  return (
+    <div className="left-panel">
+      <div className="left-panel-block">
+        <div className="left-panel-heading">
+          <div className="left-panel-title">Pinned Pages</div>
+        </div>
+        <div className="left-panel-list">
+          {pinnedPages.length > 0 ? (
+            pinnedPages.map((item) => (
+              <div
+                key={item.id}
+                className="item-card left-item-card"
+              >
+                {editingItem?.kind === 'pinned' && editingItem.id === item.id ? (
+                  <span className="left-item-main">
+                    <input
+                      ref={inputRef}
+                      className="left-item-input"
+                      value={draftName}
+                      onChange={(event) => setDraftName(event.target.value)}
+                      onBlur={() => void savePinnedCustomName(item.id, draftName)}
+                      onKeyDown={(event) => handleEditKeyDown(event, () => savePinnedCustomName(item.id, draftName))}
+                    />
+                    <span className="left-item-meta">{item.sourcePath ?? item.url}</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="bookmark-section-toggle left-item-open"
+                    onClick={() => openBookmark(item.url)}
+                  >
+                    <span className="left-item-main">
+                      <span
+                        className="left-item-title"
+                      >
+                        {getPinnedDisplayName(item.title, item.url, item.customName)}
+                      </span>
+                      <span className="left-item-meta">{item.sourcePath ?? item.url}</span>
+                    </span>
+                  </button>
+                )}
+                <span className="left-item-actions">
+                  <button
+                    ref={menuState?.kind === 'pinned' && menuState.id === item.id ? menuButtonRef : null}
+                    type="button"
+                    className={`bookmark-icon-button hover-action-button${menuState?.kind === 'pinned' && menuState.id === item.id ? ' active' : ''}`}
+                    aria-label="Open pinned page actions"
+                    title="More actions"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => openActionMenu(event, 'pinned', item.id)}
+                  >
+                    <MoreHorizontal size={14} strokeWidth={1.8} />
+                  </button>
+                  <button
+                    type="button"
+                    className="bookmark-icon-button pin-icon-button"
+                    aria-label="Unpin site"
+                    title="Unpin"
+                    onClick={() => void handleUnpin(item.id)}
+                  >
+                    <PinOff size={14} strokeWidth={1.8} />
+                  </button>
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="left-placeholder">No pinned pages.</div>
+          )}
+        </div>
+      </div>
+
+      <div className="left-panel-block">
+        <div className="left-panel-heading">
+          <div className="left-panel-title">Frequent Sites</div>
+        </div>
+        <div className="left-panel-list">
+          {frequentSites.length > 0 ? (
+            frequentSites.map((site) => (
+              <div
+                key={site.domain}
+                className="item-card left-item-card"
+              >
+                {editingItem?.kind === 'frequent' && editingItem.id === site.domain ? (
+                  <span className="left-item-main">
+                    <input
+                      ref={inputRef}
+                      className="left-item-input"
+                      value={draftName}
+                      onChange={(event) => setDraftName(event.target.value)}
+                      onBlur={() => void saveFrequentCustomName(site, draftName)}
+                      onKeyDown={(event) => handleEditKeyDown(event, () => saveFrequentCustomName(site, draftName))}
+                    />
+                    <span className="left-item-meta">
+                      {site.domain} · {Math.round(site.duration / 60000)} min / 72h
+                    </span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="bookmark-section-toggle left-item-open"
+                    onClick={() => openBookmark(site.url)}
+                  >
+                    <span className="bookmark-card-content">
+                      <FaviconImage url={site.url} className="bookmark-favicon left-item-favicon" />
+                      <span className="left-item-main">
+                        <span
+                          className="left-item-title left-item-title-multiline"
+                        >
+                          {getFrequentDisplayName(site)}
+                        </span>
+                        <span className="left-item-meta">
+                          {site.domain} · {Math.round(site.duration / 60000)} min / 72h
+                        </span>
+                      </span>
+                    </span>
+                  </button>
+                )}
+                <span className="left-item-actions">
+                  <button
+                    ref={menuState?.kind === 'frequent' && menuState.id === site.domain ? menuButtonRef : null}
+                    type="button"
+                    className={`bookmark-icon-button hover-action-button${menuState?.kind === 'frequent' && menuState.id === site.domain ? ' active' : ''}`}
+                    aria-label="Open frequent site actions"
+                    title="More actions"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => openActionMenu(event, 'frequent', site.domain)}
+                  >
+                    <MoreHorizontal size={14} strokeWidth={1.8} />
+                  </button>
+                  {(() => {
+                    const isPinned = pinnedPages.some((item) => item.url === site.url);
+
+                    return (
+                      <button
+                        type="button"
+                        className={`bookmark-icon-button pin-icon-button${isPinned ? ' active' : ''}`}
+                        aria-label={isPinned ? 'Already pinned' : 'Pin site'}
+                        title={isPinned ? 'Pinned' : 'Pin'}
+                        onClick={() => void handlePinFrequentSite(site)}
+                        disabled={isPinned}
+                      >
+                        <Pin size={14} strokeWidth={1.8} />
+                      </button>
+                    );
+                  })()}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="left-placeholder">No frequent sites.</div>
+          )}
+        </div>
+      </div>
+      {menuState
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="action-menu"
+              style={{ left: menuState.x, top: menuState.y }}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="action-menu-item"
+                onClick={() => {
+                  if (menuState.kind === 'pinned') {
+                    const target = pinnedPages.find((item) => item.id === menuState.id);
+
+                    if (target) {
+                      startEditing('pinned', target.id, getPinnedDisplayName(target.title, target.url, target.customName));
+                    }
+                  } else {
+                    const target = frequentSites.find((site) => site.domain === menuState.id);
+
+                    if (target) {
+                      startEditing('frequent', target.domain, getFrequentDisplayName(target));
+                    }
+                  }
+
+                  setMenuState(null);
+                }}
+              >
+                Rename
+              </button>
+              {menuState.kind === 'frequent' ? (
+                <button
+                  type="button"
+                  className="action-menu-item action-menu-item-danger"
+                  onClick={() => {
+                    const target = frequentSites.find((site) => site.domain === menuState.id);
+
+                    if (target) {
+                      void deleteFrequentSite(target);
+                    }
+
+                    setMenuState(null);
+                  }}
+                >
+                  Delete
+                </button>
+              ) : null}
+            </div>,
+            document.body
+          )
+        : null}
+    </div>
+  );
+}
