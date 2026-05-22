@@ -4,12 +4,6 @@ import LeftPanel from './components/LeftPanel';
 import OrganizePanel from './components/OrganizePanel';
 import RightPanel from './components/RightPanel';
 import SettingsPanel from './components/SettingsPanel';
-import {
-  getBackgroundImage,
-  removeBackgroundImage,
-  saveBackgroundImage,
-  saveBackgroundImageDataUrl
-} from './lib/backgroundImage';
 import { classifyBookmarksWithDeepSeek } from './lib/deepseek';
 import { getAllBookmarks } from './lib/bookmarks';
 import {
@@ -23,7 +17,6 @@ import {
   getLastUpdateTime,
   getPinnedPages,
   getRawTimeLog,
-  getUiSettings,
   getUrlNameCache,
   saveAutoClassifyFailedIds,
   saveBookmarkMetadata,
@@ -32,67 +25,16 @@ import {
   saveLastUpdateTime,
   savePinnedPages,
   saveRawTimeLog,
-  saveUiSettings,
   saveUrlNameCache
 } from './lib/storage';
-import type { AppDataExport, BookmarkItem, FullAiClassificationMode, UiSettings } from './types/app';
+import type { AppDataExport, BookmarkItem, FullAiClassificationMode } from './types/app';
 
 interface FullAiClassificationTrigger {
   nonce: number;
   mode: FullAiClassificationMode;
 }
 
-function clampBrightness(value: number) {
-  return Math.min(115, Math.max(85, value));
-}
-
-function getBackgroundStyle(settings: UiSettings) {
-  const brightness = clampBrightness(settings.brightness);
-  const filter = `brightness(${brightness}%)`;
-
-  const colors: Record<UiSettings['backgroundPrimary'], string> = {
-    none: '#f4f6f8',
-    mist: '#eef3f8',
-    sky: '#d9eafb',
-    ocean: '#b9d8e6',
-    teal: '#bddfdc',
-    mint: '#cfe8dc',
-    sage: '#d9e5d5',
-    lavender: '#dddaf0',
-    pearl: '#e8e5df'
-  };
-
-  const primary = colors[settings.backgroundPrimary];
-  const secondary = colors[settings.backgroundSecondary];
-  const gradient = `linear-gradient(225deg, ${primary} 0%, ${mixHex(primary, secondary, 0.45)} 46%, ${secondary} 100%)`;
-
-  return {
-    filter,
-    solidColor: primary,
-    gradientImage: gradient
-  };
-}
-
-function mixHex(colorA: string, colorB: string, weight: number) {
-  const a = colorA.replace('#', '');
-  const b = colorB.replace('#', '');
-  const ratio = Math.min(1, Math.max(0, weight));
-
-  const mixed = [0, 1, 2]
-    .map((index) => {
-      const start = parseInt(a.slice(index * 2, index * 2 + 2), 16);
-      const end = parseInt(b.slice(index * 2, index * 2 + 2), 16);
-      const value = Math.round(start + (end - start) * ratio);
-      return value.toString(16).padStart(2, '0');
-    })
-    .join('');
-
-  return `#${mixed}`;
-}
-
 export default function App() {
-  const [uiSettings, setUiSettings] = useState<UiSettings>(defaultUiSettings);
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [deepseekApiKey, setDeepseekApiKey] = useState('');
   const [allBookmarks, setAllBookmarks] = useState<BookmarkItem[]>([]);
   const [fullAiClassificationTrigger, setFullAiClassificationTrigger] = useState<FullAiClassificationTrigger>({
@@ -113,22 +55,17 @@ export default function App() {
     isDraftMode: false,
     statusMessage: null
   });
-  const backgroundTheme = getBackgroundStyle(uiSettings);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadAppState() {
-      const [storedSettings, storedBackgroundImage, storedApiKey, bookmarks] = await Promise.all([
-        getUiSettings(),
-        getBackgroundImage(),
+      const [storedApiKey, bookmarks] = await Promise.all([
         getDeepSeekApiKey(),
         getAllBookmarks()
       ]);
 
       if (isMounted) {
-        setUiSettings(storedSettings);
-        setBackgroundImage(storedBackgroundImage);
         setDeepseekApiKey(storedApiKey);
         setAllBookmarks(bookmarks);
       }
@@ -151,10 +88,6 @@ export default function App() {
         return;
       }
 
-      if (changes.uiSettings?.newValue) {
-        setUiSettings(changes.uiSettings.newValue as UiSettings);
-      }
-
       if (changes.deepseekApiKey) {
         void getDeepSeekApiKey().then((nextApiKey) => {
           setDeepseekApiKey(nextApiKey);
@@ -168,26 +101,6 @@ export default function App() {
       chrome.storage.onChanged.removeListener(handleStorageChange);
     };
   }, []);
-
-  const handleSettingsChange = async (nextSettings: UiSettings) => {
-    setUiSettings(nextSettings);
-    await saveUiSettings(nextSettings);
-  };
-
-  const handleBackgroundUpload = async (file: File) => {
-    const nextImage = await saveBackgroundImage(file);
-    setBackgroundImage(nextImage);
-  };
-
-  const handleBackgroundRemove = async () => {
-    await removeBackgroundImage();
-    setBackgroundImage(null);
-  };
-
-  const handleResetDisplay = async () => {
-    setUiSettings(defaultUiSettings);
-    await saveUiSettings(defaultUiSettings);
-  };
 
   const handleDeepSeekApiKeyChange = async (value: string) => {
     setDeepseekApiKey(value);
@@ -207,8 +120,7 @@ export default function App() {
       bookmarkMetadata,
       autoClassifyFailedIds,
       rawTimeLog,
-      lastUpdateTime,
-      currentBackgroundImage
+      lastUpdateTime
     ] = await Promise.all([
       getBookmarkPanelState(),
       getPinnedPages(),
@@ -216,14 +128,13 @@ export default function App() {
       getBookmarkMetadata(),
       getAutoClassifyFailedIds(),
       getRawTimeLog(),
-      getLastUpdateTime(),
-      getBackgroundImage()
+      getLastUpdateTime()
     ]);
 
     const payload: AppDataExport = {
       version: 1,
       exportedAt: new Date().toISOString(),
-      uiSettings,
+      uiSettings: defaultUiSettings,
       bookmarkPanelState,
       pinnedPages,
       urlNameCache,
@@ -232,7 +143,7 @@ export default function App() {
       rawTimeLog,
       lastUpdateTime,
       deepseekApiKey,
-      backgroundImage: currentBackgroundImage
+      backgroundImage: null
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -252,10 +163,6 @@ export default function App() {
       throw new Error('Invalid export file.');
     }
 
-    const nextUiSettings = {
-      ...defaultUiSettings,
-      ...parsed.uiSettings
-    };
     const nextBookmarkPanelState = {
       ...defaultBookmarkPanelState,
       ...(parsed.bookmarkPanelState ?? defaultBookmarkPanelState)
@@ -269,10 +176,8 @@ export default function App() {
     const nextRawTimeLog = Array.isArray(parsed.rawTimeLog) ? parsed.rawTimeLog : [];
     const nextLastUpdateTime = typeof parsed.lastUpdateTime === 'number' ? parsed.lastUpdateTime : 0;
     const nextApiKey = typeof parsed.deepseekApiKey === 'string' ? parsed.deepseekApiKey : '';
-    const nextBackgroundImage = typeof parsed.backgroundImage === 'string' ? parsed.backgroundImage : null;
 
     await Promise.all([
-      saveUiSettings(nextUiSettings),
       saveBookmarkPanelState(nextBookmarkPanelState),
       savePinnedPages(nextPinnedPages),
       saveUrlNameCache(nextUrlNameCache),
@@ -283,15 +188,7 @@ export default function App() {
       saveDeepSeekApiKey(nextApiKey)
     ]);
 
-    if (nextBackgroundImage) {
-      await saveBackgroundImageDataUrl(nextBackgroundImage);
-    } else {
-      await removeBackgroundImage();
-    }
-
-    setUiSettings(nextUiSettings);
     setDeepseekApiKey(nextApiKey);
-    setBackgroundImage(nextBackgroundImage);
     setAllBookmarks(await getAllBookmarks());
   };
 
@@ -331,28 +228,8 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div
-        className={`page-background${backgroundImage ? ' has-image' : ''}`}
-        style={{
-          opacity: uiSettings.opacity,
-          filter: backgroundTheme.filter,
-          backgroundColor: backgroundImage || uiSettings.backgroundStyle === 'gradient'
-            ? backgroundTheme.solidColor
-            : backgroundTheme.solidColor,
-          backgroundImage: backgroundImage
-            ? `url("${backgroundImage}")`
-            : uiSettings.backgroundStyle === 'gradient'
-              ? backgroundTheme.gradientImage
-              : 'none'
-        }}
-      />
+      <div className="page-background" />
       <SettingsPanel
-        settings={uiSettings}
-        onSettingsChange={handleSettingsChange}
-        hasBackgroundImage={Boolean(backgroundImage)}
-        onBackgroundUpload={handleBackgroundUpload}
-        onBackgroundRemove={handleBackgroundRemove}
-        onResetDisplay={handleResetDisplay}
         deepseekApiKey={deepseekApiKey}
         onDeepSeekApiKeyChange={handleDeepSeekApiKeyChange}
         onClearDeepSeekApiKey={handleClearDeepSeekApiKey}
