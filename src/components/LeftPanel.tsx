@@ -26,28 +26,33 @@ interface FrequentSite {
 
 const DAILY_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
 
-function buildFrequentSites(entries: TimeLogEntry[]): FrequentSite[] {
-  const threshold = Date.now() - 72 * 60 * 60 * 1000;
-  const recentEntries = entries.filter((entry) => entry.date >= threshold);
+function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const todayEntries = entries.filter((entry) => entry.date >= startOfToday);
   const grouped = new Map<string, FrequentSite>();
 
-  for (const entry of recentEntries) {
-    const existing = grouped.get(entry.domain);
+  for (const entry of todayEntries) {
+    const existing = grouped.get(entry.url);
 
     if (existing) {
       existing.duration += entry.duration;
+      existing.title = entry.title || existing.title;
       continue;
     }
 
-    grouped.set(entry.domain, {
-      domain: entry.domain,
+    grouped.set(entry.url, {
+      domain: entry.domain || new URL(entry.url).hostname.replace(/^www\./, ''),
       title: entry.title,
       duration: entry.duration,
       url: entry.url
     });
   }
 
-  return [...grouped.values()].sort((a, b) => b.duration - a.duration).slice(0, 6);
+  return [...grouped.values()]
+    .filter((entry) => entry.duration >= 30_000)
+    .sort((a, b) => b.duration - a.duration)
+    .slice(0, 6);
 }
 
 function syncPinnedPagesWithBookmarks(pinnedPages: PinnedPage[], bookmarks: Array<{ id: string; title: string; url: string; sourcePath: string }>) {
@@ -71,12 +76,12 @@ function syncPinnedPagesWithBookmarks(pinnedPages: PinnedPage[], bookmarks: Arra
 
 export default function LeftPanel() {
   const [pinnedPages, setPinnedPages] = useState<PinnedPage[]>([]);
-  const [frequentSites, setFrequentSites] = useState<FrequentSite[]>([]);
+  const [continuePages, setContinuePages] = useState<FrequentSite[]>([]);
   const [urlNameCache, setUrlNameCache] = useState<Record<string, string>>({});
   const [bookmarkTitleByUrl, setBookmarkTitleByUrl] = useState<Record<string, string>>({});
-  const [editingItem, setEditingItem] = useState<{ kind: 'pinned' | 'frequent'; id: string } | null>(null);
+  const [editingItem, setEditingItem] = useState<{ kind: 'pinned' | 'continue'; id: string } | null>(null);
   const [menuState, setMenuState] = useState<{
-    kind: 'pinned' | 'frequent';
+    kind: 'pinned' | 'continue';
     id: string;
     x: number;
     y: number;
@@ -98,7 +103,7 @@ export default function LeftPanel() {
         getDeepSeekApiKey(),
         getAllBookmarks()
       ]);
-      const nextFrequentSites = buildFrequentSites(rawTimeLog);
+      const nextContinuePages = buildContinuePages(rawTimeLog);
       const nextBookmarkTitleByUrl = Object.fromEntries(bookmarks.map((bookmark) => [bookmark.url, bookmark.title]));
 
       if (!isMounted) {
@@ -106,12 +111,12 @@ export default function LeftPanel() {
       }
 
       setPinnedPages(syncPinnedPagesWithBookmarks(storedPinnedPages, bookmarks));
-      setFrequentSites(nextFrequentSites);
+      setContinuePages(nextContinuePages);
       setUrlNameCache(storedUrlNameCache);
       setBookmarkTitleByUrl(nextBookmarkTitleByUrl);
 
       if (Date.now() - lastUpdateTime > DAILY_UPDATE_INTERVAL) {
-        void refreshFrequentSiteNames(nextFrequentSites, storedUrlNameCache, deepseekApiKey);
+        void refreshContinuePageNames(nextContinuePages, storedUrlNameCache, deepseekApiKey);
       }
     }
 
@@ -218,7 +223,7 @@ export default function LeftPanel() {
       }
 
       if (changes.rawTimeLog?.newValue && Array.isArray(changes.rawTimeLog.newValue)) {
-        setFrequentSites(buildFrequentSites(changes.rawTimeLog.newValue as TimeLogEntry[]));
+        setContinuePages(buildContinuePages(changes.rawTimeLog.newValue as TimeLogEntry[]));
       }
     };
 
@@ -233,12 +238,12 @@ export default function LeftPanel() {
     window.location.href = url;
   };
 
-  const refreshFrequentSiteNames = async (
-    nextFrequentSites: FrequentSite[],
+  const refreshContinuePageNames = async (
+    nextContinuePages: FrequentSite[],
     storedUrlNameCache: Record<string, string>,
     deepseekApiKey: string
   ) => {
-    const missingSites = nextFrequentSites
+    const missingSites = nextContinuePages
       .filter((site) => !storedUrlNameCache[site.url])
       .map((site) => ({
         title: site.title,
@@ -283,7 +288,7 @@ export default function LeftPanel() {
     await savePinnedPages(nextPinnedPages);
   };
 
-  const handlePinFrequentSite = async (site: FrequentSite) => {
+  const handlePinContinuePage = async (site: FrequentSite) => {
     if (pinnedPages.some((item) => item.url === site.url)) {
       return;
     }
@@ -303,7 +308,7 @@ export default function LeftPanel() {
     await savePinnedPages(nextPinnedPages);
   };
 
-  const startEditing = (kind: 'pinned' | 'frequent', id: string, currentName: string) => {
+  const startEditing = (kind: 'pinned' | 'continue', id: string, currentName: string) => {
     setEditingItem({ kind, id });
     setDraftName(currentName);
   };
@@ -313,7 +318,7 @@ export default function LeftPanel() {
     setDraftName('');
   };
 
-  const openActionMenu = (event: React.MouseEvent<HTMLElement>, kind: 'pinned' | 'frequent', id: string) => {
+  const openActionMenu = (event: React.MouseEvent<HTMLElement>, kind: 'pinned' | 'continue', id: string) => {
     event.preventDefault();
     event.stopPropagation();
     const menuWidth = 148;
@@ -369,7 +374,7 @@ export default function LeftPanel() {
     stopEditing();
   };
 
-  const saveFrequentCustomName = async (site: FrequentSite, nextName: string) => {
+  const saveContinueCustomName = async (site: FrequentSite, nextName: string) => {
     const trimmedName = nextName.trim();
     const nextUrlNameCache = {
       ...urlNameCache
@@ -386,12 +391,12 @@ export default function LeftPanel() {
     stopEditing();
   };
 
-  const deleteFrequentSite = async (site: FrequentSite) => {
+  const deleteContinuePage = async (site: FrequentSite) => {
     const rawTimeLog = await getRawTimeLog();
-    const nextRawTimeLog = rawTimeLog.filter((entry) => entry.url !== site.url && entry.domain !== site.domain);
-    const nextFrequentSites = buildFrequentSites(nextRawTimeLog);
+    const nextRawTimeLog = rawTimeLog.filter((entry) => entry.url !== site.url);
+    const nextContinuePages = buildContinuePages(nextRawTimeLog);
 
-    setFrequentSites(nextFrequentSites);
+    setContinuePages(nextContinuePages);
     await saveRawTimeLog(nextRawTimeLog);
     stopEditing();
   };
@@ -414,7 +419,7 @@ export default function LeftPanel() {
   const getPinnedDisplayName = (title: string, url: string, customName?: string) =>
     customName || urlNameCache[url] || bookmarkTitleByUrl[url] || title;
 
-  const getFrequentDisplayName = (site: FrequentSite) => {
+  const getContinueDisplayName = (site: FrequentSite) => {
     if (urlNameCache[site.url]) {
       return urlNameCache[site.url];
     }
@@ -430,7 +435,7 @@ export default function LeftPanel() {
     <div className="left-panel">
       <div className="left-panel-block">
         <div className="left-panel-heading">
-          <div className="left-panel-title">Pinned Pages</div>
+          <div className="left-panel-title">Common Entrances</div>
         </div>
         <div className="left-panel-list">
           {pinnedPages.length > 0 ? (
@@ -502,24 +507,24 @@ export default function LeftPanel() {
 
       <div className="left-panel-block">
         <div className="left-panel-heading">
-          <div className="left-panel-title">Frequent Sites</div>
+          <div className="left-panel-title">Continue Browsing</div>
         </div>
         <div className="left-panel-list">
-          {frequentSites.length > 0 ? (
-            frequentSites.map((site) => (
+          {continuePages.length > 0 ? (
+            continuePages.map((site) => (
               <div
-                key={site.domain}
+                key={site.url}
                 className="item-card left-item-card"
               >
-                {editingItem?.kind === 'frequent' && editingItem.id === site.domain ? (
+                {editingItem?.kind === 'continue' && editingItem.id === site.url ? (
                   <span className="left-item-main">
                     <input
                       ref={inputRef}
                       className="left-item-input"
                       value={draftName}
                       onChange={(event) => setDraftName(event.target.value)}
-                      onBlur={() => void saveFrequentCustomName(site, draftName)}
-                      onKeyDown={(event) => handleEditKeyDown(event, () => saveFrequentCustomName(site, draftName))}
+                      onBlur={() => void saveContinueCustomName(site, draftName)}
+                      onKeyDown={(event) => handleEditKeyDown(event, () => saveContinueCustomName(site, draftName))}
                     />
                     <span className="left-item-meta">
                       {site.domain}
@@ -537,7 +542,7 @@ export default function LeftPanel() {
                         <span
                           className="left-item-title left-item-title-multiline"
                         >
-                          {getFrequentDisplayName(site)}
+                          {getContinueDisplayName(site)}
                         </span>
                         <span className="left-item-meta">{site.domain}</span>
                       </span>
@@ -546,16 +551,16 @@ export default function LeftPanel() {
                 )}
                 <span className="left-item-actions">
                   <button
-                    ref={menuState?.kind === 'frequent' && menuState.id === site.domain ? menuButtonRef : null}
+                    ref={menuState?.kind === 'continue' && menuState.id === site.url ? menuButtonRef : null}
                     type="button"
-                    className={`bookmark-icon-button hover-action-button${menuState?.kind === 'frequent' && menuState.id === site.domain ? ' active' : ''}`}
-                    aria-label="Open frequent site actions"
+                    className={`bookmark-icon-button hover-action-button${menuState?.kind === 'continue' && menuState.id === site.url ? ' active' : ''}`}
+                    aria-label="Open continue page actions"
                     title="More actions"
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                     }}
-                    onClick={(event) => openActionMenu(event, 'frequent', site.domain)}
+                    onClick={(event) => openActionMenu(event, 'continue', site.url)}
                   >
                     <MoreHorizontal size={14} strokeWidth={1.8} />
                   </button>
@@ -568,7 +573,7 @@ export default function LeftPanel() {
                         className={`bookmark-icon-button pin-icon-button${isPinned ? ' active' : ''}`}
                         aria-label={isPinned ? 'Already pinned' : 'Pin site'}
                         title={isPinned ? 'Pinned' : 'Pin'}
-                        onClick={() => void handlePinFrequentSite(site)}
+                        onClick={() => void handlePinContinuePage(site)}
                         disabled={isPinned}
                       >
                         <Pin size={14} strokeWidth={1.8} />
@@ -579,7 +584,7 @@ export default function LeftPanel() {
               </div>
             ))
           ) : (
-            <div className="left-placeholder">No frequent sites.</div>
+            <div className="left-placeholder">No pages to continue yet.</div>
           )}
         </div>
       </div>
@@ -602,10 +607,10 @@ export default function LeftPanel() {
                       startEditing('pinned', target.id, getPinnedDisplayName(target.title, target.url, target.customName));
                     }
                   } else {
-                    const target = frequentSites.find((site) => site.domain === menuState.id);
+                    const target = continuePages.find((site) => site.url === menuState.id);
 
                     if (target) {
-                      startEditing('frequent', target.domain, getFrequentDisplayName(target));
+                      startEditing('continue', target.url, getContinueDisplayName(target));
                     }
                   }
 
@@ -614,15 +619,15 @@ export default function LeftPanel() {
               >
                 Rename
               </button>
-              {menuState.kind === 'frequent' ? (
+              {menuState.kind === 'continue' ? (
                 <button
                   type="button"
                   className="action-menu-item action-menu-item-danger"
                   onClick={() => {
-                    const target = frequentSites.find((site) => site.domain === menuState.id);
+                    const target = continuePages.find((site) => site.url === menuState.id);
 
                     if (target) {
-                      void deleteFrequentSite(target);
+                      void deleteContinuePage(target);
                     }
 
                     setMenuState(null);
