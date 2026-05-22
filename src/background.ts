@@ -138,7 +138,8 @@ chrome.bookmarks.onCreated.addListener(async (_id: string, bookmark: chrome.book
     return;
   }
 
-  const bookmarkLabel = bookmark.title || bookmark.url;
+  const bookmarkLabel = (bookmark.title || bookmark.url).trim();
+  const shortBookmarkLabel = bookmarkLabel.length > 48 ? `${bookmarkLabel.slice(0, 45)}...` : bookmarkLabel;
 
   const apiKey = await getDeepSeekApiKey();
   const failedIds = await getAutoClassifyFailedIds();
@@ -157,7 +158,7 @@ chrome.bookmarks.onCreated.addListener(async (_id: string, bookmark: chrome.book
   if (!apiKey.trim()) {
     await markFailure();
     await saveAutoClassifyNotice(
-      `${bookmarkLabel} was not auto-classified because no DeepSeek API key is configured. You can place it manually in Organize mode.`
+      `New bookmark: ${shortBookmarkLabel} (not grouped, API key missing)`
     );
     return;
   }
@@ -167,7 +168,7 @@ chrome.bookmarks.onCreated.addListener(async (_id: string, bookmark: chrome.book
   if (panelState.virtualCategories.length === 0) {
     await markFailure();
     await saveAutoClassifyNotice(
-      `${bookmarkLabel} was not auto-classified because there are no existing categories yet. You can sort it in Organize mode.`
+      `New bookmark: ${shortBookmarkLabel} (not grouped, no groups yet)`
     );
     return;
   }
@@ -191,7 +192,7 @@ chrome.bookmarks.onCreated.addListener(async (_id: string, bookmark: chrome.book
     if (!targetCategoryTitle || targetCategoryTitle === 'Unclassified') {
       await markFailure();
       await saveAutoClassifyNotice(
-        `${bookmarkLabel} could not be matched to an existing category. You can review it in Organize mode.`
+        `New bookmark: ${shortBookmarkLabel} (not grouped)`
       );
       return;
     }
@@ -205,14 +206,14 @@ chrome.bookmarks.onCreated.addListener(async (_id: string, bookmark: chrome.book
     if (!targetCategory) {
       await markFailure();
       await saveAutoClassifyNotice(
-        `${bookmarkLabel} could not be matched to an existing category. You can review it in Organize mode.`
+        `New bookmark: ${shortBookmarkLabel} (not grouped)`
       );
       return;
     }
 
     if (targetCategory.bookmarkIds.includes(bookmark.id)) {
       await clearFailure();
-      await saveAutoClassifyNotice(`${bookmarkLabel} is already in ${targetCategoryTitle}.`);
+      await saveAutoClassifyNotice(`New bookmark: ${shortBookmarkLabel} -> ${targetCategoryTitle}`);
       return;
     }
 
@@ -223,11 +224,11 @@ chrome.bookmarks.onCreated.addListener(async (_id: string, bookmark: chrome.book
       virtualCategories: nextCategories
     });
     await clearFailure();
-    await saveAutoClassifyNotice(`${bookmarkLabel} was automatically added to ${targetCategoryTitle}.`);
+    await saveAutoClassifyNotice(`New bookmark: ${shortBookmarkLabel} -> ${targetCategoryTitle}`);
   } catch {
     await markFailure();
     await saveAutoClassifyNotice(
-      `${bookmarkLabel} could not be auto-classified because the DeepSeek request failed. You can review it in Organize mode.`
+      `New bookmark: ${shortBookmarkLabel} (grouping failed)`
     );
   }
 });

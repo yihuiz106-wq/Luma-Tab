@@ -299,18 +299,18 @@ export default function App() {
     const sampleBookmarks = allBookmarks.slice(0, 8);
 
     if (sampleBookmarks.length === 0) {
-      throw new Error('No bookmarks to validate.');
+      throw new Error('No bookmarks.');
     }
 
     const result = await classifyBookmarksWithDeepSeek(deepseekApiKey, sampleBookmarks);
     const categoryCount = Object.keys(result).length;
 
-    return `Validated: ${categoryCount} categories.`;
+    return `Checked: ${categoryCount} groups.`;
   };
 
   const handleRunFullAiClassification = async (mode: FullAiClassificationMode) => {
     if (!deepseekApiKey.trim()) {
-      throw new Error('Add an API key first.');
+      throw new Error('Add API key first.');
     }
 
     setFullAiClassificationTrigger((current) => ({
@@ -318,8 +318,8 @@ export default function App() {
       mode
     }));
     return mode === 'overwrite'
-      ? 'AI is reclassifying all bookmarks. Review the draft on the right.'
-      : 'AI is trying to place unclassified bookmarks into your existing categories. Review the draft on the right.';
+      ? 'AI regrouping all bookmarks...'
+      : 'AI grouping ungrouped bookmarks...';
   };
 
   const dispatchOrganizeCommand = (action: 'open' | 'create' | 'save' | 'discard') => {

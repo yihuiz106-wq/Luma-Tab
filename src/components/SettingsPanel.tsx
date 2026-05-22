@@ -1,5 +1,5 @@
 import { Settings2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type WheelEvent as ReactWheelEvent, useEffect, useRef, useState } from 'react';
 import type { UiSettings } from '../types/app';
 
 const themeColorOptions: Array<{
@@ -53,6 +53,48 @@ export default function SettingsPanel({
   const [isClearingApiKey, setIsClearingApiKey] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+
+  const nudgePopoverContent = (direction: 'up' | 'down') => {
+    const element = shellRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    element.classList.remove('popover-bump-up', 'popover-bump-down');
+    void element.offsetWidth;
+    element.classList.add(direction === 'up' ? 'popover-bump-up' : 'popover-bump-down');
+
+    window.setTimeout(() => {
+      element.classList.remove('popover-bump-up', 'popover-bump-down');
+    }, 180);
+  };
+
+  const containPopoverScroll = (event: ReactWheelEvent<HTMLDivElement>) => {
+    const element = event.currentTarget;
+
+    if (element.scrollHeight <= element.clientHeight) {
+      nudgePopoverContent(event.deltaY < 0 ? 'down' : 'up');
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const nextScrollTop = Math.max(
+      0,
+      Math.min(element.scrollTop + event.deltaY, element.scrollHeight - element.clientHeight)
+    );
+
+    if (nextScrollTop !== element.scrollTop) {
+      element.scrollTop = nextScrollTop;
+    } else {
+      nudgePopoverContent(event.deltaY < 0 ? 'down' : 'up');
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   useEffect(() => {
     setApiKeyValue(deepseekApiKey);
@@ -63,6 +105,10 @@ export default function SettingsPanel({
       return;
     }
 
+    window.dispatchEvent(new CustomEvent('luma:settings-opened'));
+    document.documentElement.classList.add('popover-scroll-lock');
+    document.body.classList.add('popover-scroll-lock');
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsOpen(false);
@@ -72,6 +118,8 @@ export default function SettingsPanel({
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      document.documentElement.classList.remove('popover-scroll-lock');
+      document.body.classList.remove('popover-scroll-lock');
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen]);
@@ -88,7 +136,7 @@ export default function SettingsPanel({
 
     try {
       await onBackgroundUpload(file);
-      setStatus('Background updated.');
+      setStatus('Image updated.');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Upload failed.');
     } finally {
@@ -102,7 +150,7 @@ export default function SettingsPanel({
 
     try {
       await onBackgroundRemove();
-      setStatus('Background removed.');
+      setStatus('Image removed.');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Remove failed.');
     }
@@ -147,7 +195,7 @@ export default function SettingsPanel({
 
     try {
       await onExportData();
-      setStatus('Data exported.');
+      setStatus('Exported.');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Export failed.');
     } finally {
@@ -166,7 +214,7 @@ export default function SettingsPanel({
 
     try {
       await onImportData(file);
-      setStatus('Data imported.');
+      setStatus('Imported.');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Import failed.');
     } finally {
@@ -195,11 +243,11 @@ export default function SettingsPanel({
             onClick={() => setIsOpen(false)}
           />
           <div className="settings-popover glass-panel">
-            <div className="settings-shell">
-                <div className="settings-header">
-                  <div>
-                    <div className="settings-title">Settings</div>
-                  </div>
+            <div ref={shellRef} className="settings-shell" onWheelCapture={containPopoverScroll}>
+              <div className="settings-header">
+                <div>
+                  <div className="settings-title">Settings</div>
+                </div>
                 <button
                   type="button"
                   className="settings-close"
@@ -212,12 +260,74 @@ export default function SettingsPanel({
 
               <section className="settings-section">
                 <div className="settings-section-header">
+                  <div className="settings-section-title">API</div>
+                </div>
+                <div className="settings-actions-column">
+                  <input
+                    className="settings-text-input"
+                    type="password"
+                    value={apiKeyValue}
+                    placeholder="DeepSeek API key"
+                    onChange={(event) => setApiKeyValue(event.target.value)}
+                  />
+                  <div className="settings-button-grid">
+                    <button
+                      type="button"
+                      className="settings-secondary-button"
+                      onClick={() => void handleApiKeySave()}
+                      disabled={isSavingApiKey}
+                    >
+                      {isSavingApiKey ? 'Saving...' : 'Save Key'}
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-secondary-button"
+                      onClick={() => void handleApiKeyClear()}
+                      disabled={isClearingApiKey}
+                    >
+                      {isClearingApiKey ? 'Clearing...' : 'Clear Key'}
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <div className="settings-section-header">
+                  <div className="settings-section-title">Data</div>
+                </div>
+
+                <div className="settings-actions-column">
+                  <div className="settings-button-grid">
+                    <button
+                      type="button"
+                      className="settings-secondary-button"
+                      onClick={() => void handleExportClick()}
+                      disabled={isExporting}
+                    >
+                      {isExporting ? 'Exporting...' : 'Export'}
+                    </button>
+                    <label className="settings-secondary-button settings-import-button">
+                      <span>{isImporting ? 'Importing...' : 'Import'}</span>
+                      <input
+                        type="file"
+                        accept="application/json"
+                        onChange={handleImportFileChange}
+                        disabled={isImporting}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <div className="settings-section-header">
                   <div className="settings-section-title">Display</div>
                 </div>
 
                 <label className="settings-field">
                   <span className="settings-field-label">
-                    Background opacity {Math.round(settings.opacity * 100)}%
+                    Opacity {Math.round(settings.opacity * 100)}%
                   </span>
                   <input
                     type="range"
@@ -228,70 +338,6 @@ export default function SettingsPanel({
                     onChange={(event) => void updateSettings({ opacity: Number(event.target.value) })}
                   />
                 </label>
-
-                <div className="settings-field">
-                  <span className="settings-field-label">Background style</span>
-                  <div className="settings-inline-options">
-                    <button
-                      type="button"
-                      className={`settings-chip${settings.backgroundStyle === 'solid' ? ' active' : ''}`}
-                      onClick={() => void updateSettings({ backgroundStyle: 'solid' })}
-                    >
-                      Solid
-                    </button>
-                    <button
-                      type="button"
-                      className={`settings-chip${settings.backgroundStyle === 'gradient' ? ' active' : ''}`}
-                      onClick={() => void updateSettings({ backgroundStyle: 'gradient' })}
-                    >
-                      Gradient
-                    </button>
-                  </div>
-                </div>
-
-                <div className="settings-field">
-                  <span className="settings-field-label">Primary color</span>
-                  <div className="settings-color-grid">
-                    {themeColorOptions.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={`settings-color-swatch${settings.backgroundPrimary === option.id ? ' active' : ''}`}
-                        title={option.label}
-                        aria-label={option.label}
-                        onClick={() => void updateSettings({ backgroundPrimary: option.id })}
-                        style={{
-                          background: option.id === 'none'
-                            ? 'linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)'
-                            : option.swatch
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="settings-field">
-                  <span className="settings-field-label">
-                    {settings.backgroundStyle === 'gradient' ? 'Secondary color' : 'Base color preview'}
-                  </span>
-                  <div className="settings-color-grid">
-                    {themeColorOptions.map((option) => (
-                      <button
-                        key={`secondary-${option.id}`}
-                        type="button"
-                        className={`settings-color-swatch${settings.backgroundSecondary === option.id ? ' active' : ''}`}
-                        title={option.label}
-                        aria-label={option.label}
-                        onClick={() => void updateSettings({ backgroundSecondary: option.id })}
-                        style={{
-                          background: option.id === 'none'
-                            ? 'linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)'
-                            : option.swatch
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
 
                 <label className="settings-field">
                   <span className="settings-field-label">
@@ -316,12 +362,76 @@ export default function SettingsPanel({
                 </button>
               </section>
 
-              <section className="settings-section">
+              <section className="settings-section settings-section-compact">
                 <div className="settings-section-header">
                   <div className="settings-section-title">Background</div>
                 </div>
 
-                <div className="settings-actions-column">
+                <div className="settings-field">
+                  <span className="settings-field-label">Style</span>
+                  <div className="settings-inline-options">
+                    <button
+                      type="button"
+                      className={`settings-chip${settings.backgroundStyle === 'solid' ? ' active' : ''}`}
+                      onClick={() => void updateSettings({ backgroundStyle: 'solid' })}
+                    >
+                      Solid
+                    </button>
+                    <button
+                      type="button"
+                      className={`settings-chip${settings.backgroundStyle === 'gradient' ? ' active' : ''}`}
+                      onClick={() => void updateSettings({ backgroundStyle: 'gradient' })}
+                    >
+                      Gradient
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-field">
+                  <span className="settings-field-label">Colors</span>
+                  <div className="settings-color-grid compact">
+                    {themeColorOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`settings-color-swatch${settings.backgroundPrimary === option.id ? ' active' : ''}`}
+                        title={option.label}
+                        aria-label={option.label}
+                        onClick={() => void updateSettings({ backgroundPrimary: option.id })}
+                        style={{
+                          background: option.id === 'none'
+                            ? 'linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)'
+                            : option.swatch
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {settings.backgroundStyle === 'gradient' ? (
+                  <div className="settings-field">
+                    <span className="settings-field-label">Accent</span>
+                    <div className="settings-color-grid compact">
+                      {themeColorOptions.map((option) => (
+                        <button
+                          key={`secondary-${option.id}`}
+                          type="button"
+                          className={`settings-color-swatch${settings.backgroundSecondary === option.id ? ' active' : ''}`}
+                          title={option.label}
+                          aria-label={option.label}
+                          onClick={() => void updateSettings({ backgroundSecondary: option.id })}
+                          style={{
+                            background: option.id === 'none'
+                              ? 'linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)'
+                              : option.swatch
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="settings-button-grid compact">
                   <label className="settings-upload">
                     <span>{isUploading ? 'Uploading...' : 'Upload Image'}</span>
                     <input
@@ -332,86 +442,14 @@ export default function SettingsPanel({
                       style={{ display: 'none' }}
                     />
                   </label>
-
-                  {hasBackgroundImage ? (
-                    <button type="button" className="settings-secondary-button" onClick={handleRemoveClick}>
-                      Remove Image
-                    </button>
-                  ) : null}
-
-                  {hasBackgroundImage ? (
-                    <button
-                      type="button"
-                      className="settings-secondary-button"
-                      onClick={handleRemoveClick}
-                    >
-                      Reset Background
-                    </button>
-                  ) : null}
-                </div>
-              </section>
-
-              <section className="settings-section">
-                <div className="settings-section-header">
-                  <div className="settings-section-title">DeepSeek</div>
-                </div>
-
-                <div className="settings-actions-column">
-                  <input
-                    className="settings-text-input"
-                    type="password"
-                    value={apiKeyValue}
-                    placeholder="API key"
-                    onChange={(event) => setApiKeyValue(event.target.value)}
-                  />
-
-                  <div className="settings-button-grid">
-                    <button
-                      type="button"
-                      className="settings-secondary-button"
-                      onClick={() => void handleApiKeySave()}
-                      disabled={isSavingApiKey}
-                    >
-                      {isSavingApiKey ? 'Saving...' : 'Save API Key'}
-                    </button>
-                    <button
-                      type="button"
-                      className="settings-secondary-button"
-                      onClick={() => void handleApiKeyClear()}
-                      disabled={isClearingApiKey}
-                    >
-                      {isClearingApiKey ? 'Clearing...' : 'Clear API Key'}
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              <section className="settings-section">
-                <div className="settings-section-header">
-                  <div className="settings-section-title">Data</div>
-                </div>
-
-                <div className="settings-actions-column">
-                  <div className="settings-button-grid">
-                    <button
-                      type="button"
-                      className="settings-secondary-button"
-                      onClick={() => void handleExportClick()}
-                      disabled={isExporting}
-                    >
-                      {isExporting ? 'Exporting...' : 'Export Data'}
-                    </button>
-                    <label className="settings-secondary-button settings-import-button">
-                      <span>{isImporting ? 'Importing...' : 'Import Data'}</span>
-                      <input
-                        type="file"
-                        accept="application/json"
-                        onChange={handleImportFileChange}
-                        disabled={isImporting}
-                        style={{ display: 'none' }}
-                      />
-                    </label>
-                  </div>
+                  <button
+                    type="button"
+                    className="settings-secondary-button"
+                    onClick={handleRemoveClick}
+                    disabled={!hasBackgroundImage}
+                  >
+                    {hasBackgroundImage ? 'Remove Image' : 'No Image'}
+                  </button>
                 </div>
               </section>
 

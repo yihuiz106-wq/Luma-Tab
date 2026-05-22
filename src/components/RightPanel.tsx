@@ -17,8 +17,8 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, PencilLine, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { GripVertical, MoreHorizontal, PencilLine, Trash2, X } from 'lucide-react';
+import { type WheelEvent as ReactWheelEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import FaviconImage from './FaviconImage';
 import { getAllBookmarks, removeBookmark } from '../lib/bookmarks';
@@ -169,6 +169,43 @@ function buildViewCategories(
   });
 
   return categories;
+}
+
+function containOverlayScroll(event: ReactWheelEvent<HTMLElement>) {
+  const element = event.currentTarget;
+
+  const nudgeClass = event.deltaY < 0 ? 'popover-bump-down' : 'popover-bump-up';
+
+  if (element.scrollHeight <= element.clientHeight) {
+    element.classList.remove('popover-bump-up', 'popover-bump-down');
+    void element.offsetWidth;
+    element.classList.add(nudgeClass);
+    window.setTimeout(() => {
+      element.classList.remove('popover-bump-up', 'popover-bump-down');
+    }, 180);
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
+  const nextScrollTop = Math.max(
+    0,
+    Math.min(element.scrollTop + event.deltaY, element.scrollHeight - element.clientHeight)
+  );
+
+  if (nextScrollTop !== element.scrollTop) {
+    element.scrollTop = nextScrollTop;
+  } else {
+    element.classList.remove('popover-bump-up', 'popover-bump-down');
+    void element.offsetWidth;
+    element.classList.add(nudgeClass);
+    window.setTimeout(() => {
+      element.classList.remove('popover-bump-up', 'popover-bump-down');
+    }, 180);
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function SortableBookmarkCard({
@@ -345,8 +382,19 @@ function SortableBookmarkCard({
       }}
       className={`item-card bookmark-card${dragEnabled ? ' drag-enabled' : ''}${isDragging ? ' dragging' : ''}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...dragCardProps}
     >
+      {dragEnabled ? (
+        <button
+          type="button"
+          className="bookmark-drag-handle"
+          aria-label={`Drag bookmark ${displayTitle}`}
+          title="Drag bookmark"
+          onClick={(event) => event.preventDefault()}
+          {...dragCardProps}
+        >
+          <GripVertical size={14} strokeWidth={1.8} />
+        </button>
+      ) : null}
       <button
         type="button"
         className="bookmark-card-main"
@@ -384,6 +432,7 @@ function SortableBookmarkCard({
               className="action-menu"
               style={{ left: actionMenuPosition.left, top: actionMenuPosition.top }}
               onMouseDown={(event) => event.stopPropagation()}
+              onWheelCapture={containOverlayScroll}
             >
               <button
                 type="button"
@@ -401,7 +450,7 @@ function SortableBookmarkCard({
                   }, 0);
                 }}
               >
-                Rename
+                Edit
               </button>
               <button
                 type="button"
@@ -411,7 +460,7 @@ function SortableBookmarkCard({
                   onDeleteBookmark(bookmark);
                 }}
               >
-                Delete Bookmark
+                Delete
               </button>
             </div>,
             document.body
@@ -425,7 +474,20 @@ function SortableBookmarkCard({
               style={{ left: editorPosition.left, top: editorPosition.top }}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
+              onWheelCapture={containOverlayScroll}
             >
+              <div className="bookmark-editor-header">
+                <div className="bookmark-editor-title">Edit</div>
+                <button
+                  type="button"
+                  className="bookmark-editor-close"
+                  aria-label="Close editor"
+                  title="Close"
+                  onClick={onCloseEditor}
+                >
+                  <X size={14} strokeWidth={1.9} />
+                </button>
+              </div>
               <div className="bookmark-editor-grid">
                 <label className="bookmark-editor-field">
                   <span>Name</span>
@@ -474,8 +536,11 @@ function SortableBookmarkCard({
                 </label>
               </div>
               <div className="bookmark-editor-actions">
+                <button type="button" className="bookmark-primary-button" onClick={() => onSaveEditor(bookmark)}>
+                  Save
+                </button>
                 <button type="button" className="bookmark-secondary-button" onClick={onDiscardEditor}>
-                  Ignore Changes
+                  Cancel
                 </button>
               </div>
             </div>,
@@ -536,18 +601,29 @@ function SortableCategorySection({
   return (
     <section
       ref={setNodeRef}
-      className={`bookmark-section${isDragging ? ' dragging' : ''}`}
+      className={`bookmark-section${isDragging ? ' dragging' : ''}${isExpanded ? '' : ' collapsed'}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div className={`bookmark-section-header${dragEnabled && !category.isSystem ? ' drag-enabled' : ''}`}>
         <span className="bookmark-section-title">
           <span className="bookmark-section-title-row">
+            {dragEnabled && !category.isSystem ? (
+              <button
+                type="button"
+                className="bookmark-drag-handle category-drag-handle"
+                aria-label={`Drag category ${category.title}`}
+                title="Drag category"
+                onClick={(event) => event.preventDefault()}
+                {...attributes}
+                {...listeners}
+              >
+                <GripVertical size={14} strokeWidth={1.8} />
+              </button>
+            ) : null}
             <button
               type="button"
               className="bookmark-section-toggle"
               onClick={() => onToggle(category.id)}
-              {...attributes}
-              {...listeners}
             >
               {isEditing ? (
                 <input
@@ -689,7 +765,7 @@ export default function RightPanel({
   const [editorBookmarkId, setEditorBookmarkId] = useState<string | null>(null);
   const [editorState, setEditorState] = useState({ title: '', url: '', description: '' });
   const lastProcessedOrganizeCommandNonce = useRef(0);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const reloadBookmarks = async () => {
     const bookmarks = await getAllBookmarks();
@@ -843,9 +919,12 @@ export default function RightPanel({
       return;
     }
 
+    const isNewBookmarkNotice = autoNoticeMessage.startsWith('New bookmark:');
+    const dismissDelay = isNewBookmarkNotice ? 7000 : 3000;
+
     const timeoutId = window.setTimeout(() => {
       setAutoNoticeMessage(null);
-    }, 3000);
+    }, dismissDelay);
 
     return () => {
       window.clearTimeout(timeoutId);
@@ -865,6 +944,18 @@ export default function RightPanel({
       window.clearTimeout(timeoutId);
     };
   }, [statusMessage]);
+
+  useEffect(() => {
+    const handleSettingsOpened = () => {
+      resetBookmarkEditor();
+    };
+
+    window.addEventListener('luma:settings-opened', handleSettingsOpened);
+
+    return () => {
+      window.removeEventListener('luma:settings-opened', handleSettingsOpened);
+    };
+  }, []);
 
   useEffect(() => {
     if (!fullAiClassificationTrigger.nonce || !deepseekApiKey.trim() || allBookmarks.length === 0) {
@@ -891,7 +982,7 @@ export default function RightPanel({
           setEditingTitle('');
           setAiGeneratedCategoryIds(nextDraftCategories.map((category) => category.id));
           setAiSuggestedBookmarkIds(nextDraftCategories.flatMap((category) => category.bookmarkIds));
-          setStatusMessage('DeepSeek created a draft using overwrite mode. Review it in the sandbox preview on the right.');
+          setStatusMessage('AI draft ready.');
           return;
         }
 
@@ -900,7 +991,7 @@ export default function RightPanel({
         const unclassifiedBookmarks = allBookmarks.filter((bookmark) => !assignedBookmarkIds.has(bookmark.id));
 
         if (unclassifiedBookmarks.length === 0) {
-          setStatusMessage('There are no unclassified bookmarks to fill right now.');
+          setStatusMessage('No ungrouped bookmarks.');
           return;
         }
 
@@ -939,11 +1030,11 @@ export default function RightPanel({
             .map((category) => category.id)
         );
         setAiSuggestedBookmarkIds(aiDraftCategories.flatMap((category) => category.bookmarkIds));
-        setStatusMessage('DeepSeek created a draft using unclassified-only mode. Review it in the sandbox preview on the right.');
+        setStatusMessage('AI grouped ungrouped bookmarks.');
       } catch (classificationError) {
         if (!isCancelled) {
           setStatusMessage(
-            classificationError instanceof Error ? classificationError.message : 'Full AI classification failed.'
+            classificationError instanceof Error ? classificationError.message : 'AI classify failed.'
           );
         }
       } finally {
@@ -990,7 +1081,7 @@ export default function RightPanel({
 
   const footerStatus = useMemo(() => {
     if (isAiProcessing) {
-      return 'AI is processing...';
+      return 'AI running...';
     }
 
     if (autoNoticeMessage) {
@@ -1078,7 +1169,7 @@ export default function RightPanel({
       setAiGeneratedCategoryIds([]);
       setAiSuggestedBookmarkIds([]);
       void persistCurrentState(expandedCategoryIds, nextDraftCategories);
-      setStatusMessage('Web categories saved. The original Chrome bookmark tree was not modified.');
+      setStatusMessage('Groups saved.');
       return;
     }
 
@@ -1089,7 +1180,7 @@ export default function RightPanel({
       setEditingTitle('');
       setAiGeneratedCategoryIds([]);
       setAiSuggestedBookmarkIds([]);
-      setStatusMessage('Draft changes discarded. Web categories have been restored to the last saved state.');
+      setStatusMessage('Draft discarded.');
     }
   }, [organizeCommand, isDraftMode, storedVirtualCategories, draftVirtualCategories, expandedCategoryIds]);
 
@@ -1159,7 +1250,7 @@ export default function RightPanel({
 
     setAiGeneratedCategoryIds((current) => current.filter((id) => id !== categoryId));
     setAiSuggestedBookmarkIds((current) => current.filter((id) => !acceptedBookmarkIds.includes(id)));
-    setStatusMessage(`Accepted the AI draft for "${draftCategory.title}".`);
+    setStatusMessage(`Accepted: ${draftCategory.title}`);
   };
 
   const rejectAiCategory = (categoryId: string) => {
@@ -1199,7 +1290,7 @@ export default function RightPanel({
 
     setAiGeneratedCategoryIds((current) => current.filter((id) => id !== categoryId));
     setAiSuggestedBookmarkIds((current) => current.filter((id) => !rejectedBookmarkIds.includes(id)));
-    setStatusMessage(`Reverted the AI draft for "${draftCategory.title}".`);
+    setStatusMessage(`Reverted: ${draftCategory.title}`);
   };
 
   const updateDraftVirtualCategories = (
@@ -1297,43 +1388,17 @@ export default function RightPanel({
             chrome.bookmarks.update(bookmark.id, { url: nextUrl }, () => resolve());
           });
         } catch {
-          setStatusMessage(`Updated "${nextTitle}", but the URL could not be changed.`);
+          setStatusMessage(`Updated: ${nextTitle} (URL unchanged)`);
         }
       }
     }
 
     await Promise.all(persistPromises);
-    setStatusMessage((current) => current ?? `Updated "${nextTitle}".`);
+    setStatusMessage((current) => current ?? `Updated: ${nextTitle}`);
   };
 
   const closeBookmarkEditor = () => {
-    if (!editorBookmarkId) {
-      resetBookmarkEditor();
-      return;
-    }
-
-    const targetBookmark = allBookmarks.find((bookmark) => bookmark.id === editorBookmarkId);
-
-    if (!targetBookmark) {
-      resetBookmarkEditor();
-      return;
-    }
-
-    const currentTitle = getDisplayTitle(targetBookmark);
-    const currentUrl = targetBookmark.url;
-    const currentDescription = getBookmarkDescription(targetBookmark.id);
-    const nextTitle = editorState.title.trim() || targetBookmark.title || targetBookmark.url;
-    const nextUrl = editorState.url.trim() || targetBookmark.url;
-    const nextDescription = editorState.description.trim();
-    const hasChanges =
-      nextTitle !== currentTitle || nextUrl !== currentUrl || nextDescription !== currentDescription;
-
-    if (!hasChanges) {
-      resetBookmarkEditor();
-      return;
-    }
-
-    void saveBookmarkEditor(targetBookmark);
+    resetBookmarkEditor();
   };
 
   const deleteBookmarkItem = async (bookmark: BookmarkItem) => {
@@ -1367,10 +1432,11 @@ export default function RightPanel({
       removeBookmark(bookmark.id)
     ]);
 
-    setStatusMessage(`Deleted "${getDisplayTitle(bookmark)}".`);
+    setStatusMessage(`Deleted: ${getDisplayTitle(bookmark)}`);
   };
 
   const startEditingCategory = (category: BookmarkCategory) => {
+    resetBookmarkEditor();
     setEditingCategoryId(category.id);
     setEditingTitle(category.title);
   };
@@ -1434,6 +1500,7 @@ export default function RightPanel({
     });
 
   const handleDragStart = (event: DragStartEvent) => {
+    resetBookmarkEditor();
     const type = event.active.data.current?.type;
 
     if (type === 'category' || type === 'bookmark') {

@@ -522,7 +522,7 @@ export default function LeftPanel() {
                       onKeyDown={(event) => handleEditKeyDown(event, () => saveFrequentCustomName(site, draftName))}
                     />
                     <span className="left-item-meta">
-                      {site.domain} · {Math.round(site.duration / 60000)} min / 72h
+                      {site.domain}
                     </span>
                   </span>
                 ) : (
@@ -539,9 +539,7 @@ export default function LeftPanel() {
                         >
                           {getFrequentDisplayName(site)}
                         </span>
-                        <span className="left-item-meta">
-                          {site.domain} · {Math.round(site.duration / 60000)} min / 72h
-                        </span>
+                        <span className="left-item-meta">{site.domain}</span>
                       </span>
                     </span>
                   </button>

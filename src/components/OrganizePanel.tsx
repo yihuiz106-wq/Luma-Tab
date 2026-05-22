@@ -1,5 +1,5 @@
 import { SlidersHorizontal, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type WheelEvent as ReactWheelEvent, useEffect, useRef, useState } from 'react';
 import type { FullAiClassificationMode } from '../types/app';
 
 interface OrganizePanelProps {
@@ -28,6 +28,48 @@ export default function OrganizePanel({
   const [localStatus, setLocalStatus] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isRunningClassification, setIsRunningClassification] = useState(false);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+
+  const nudgePopoverContent = (direction: 'up' | 'down') => {
+    const element = shellRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    element.classList.remove('popover-bump-up', 'popover-bump-down');
+    void element.offsetWidth;
+    element.classList.add(direction === 'up' ? 'popover-bump-up' : 'popover-bump-down');
+
+    window.setTimeout(() => {
+      element.classList.remove('popover-bump-up', 'popover-bump-down');
+    }, 180);
+  };
+
+  const containPopoverScroll = (event: ReactWheelEvent<HTMLDivElement>) => {
+    const element = event.currentTarget;
+
+    if (element.scrollHeight <= element.clientHeight) {
+      nudgePopoverContent(event.deltaY < 0 ? 'down' : 'up');
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const nextScrollTop = Math.max(
+      0,
+      Math.min(element.scrollTop + event.deltaY, element.scrollHeight - element.clientHeight)
+    );
+
+    if (nextScrollTop !== element.scrollTop) {
+      element.scrollTop = nextScrollTop;
+    } else {
+      nudgePopoverContent(event.deltaY < 0 ? 'down' : 'up');
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   useEffect(() => {
     if (statusMessage) {
@@ -36,10 +78,17 @@ export default function OrganizePanel({
   }, [statusMessage]);
 
   const closeOrganizer = () => {
-    if (isDraftMode) {
-      onDiscardDraft();
-    }
+    onDiscardDraft();
+    setIsOpen(false);
+  };
 
+  const handleDiscardDraft = () => {
+    onDiscardDraft();
+    setIsOpen(false);
+  };
+
+  const handleSaveCategories = () => {
+    onSaveCategories();
     setIsOpen(false);
   };
 
@@ -48,18 +97,29 @@ export default function OrganizePanel({
       return;
     }
 
+    document.documentElement.classList.add('popover-scroll-lock');
+    document.body.classList.add('popover-scroll-lock');
+
+    const handleSettingsOpened = () => {
+      closeOrganizer();
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         closeOrganizer();
       }
     };
 
+    window.addEventListener('luma:settings-opened', handleSettingsOpened);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      document.documentElement.classList.remove('popover-scroll-lock');
+      document.body.classList.remove('popover-scroll-lock');
+      window.removeEventListener('luma:settings-opened', handleSettingsOpened);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, isDraftMode]);
+  }, [isOpen, isDraftMode, onDiscardDraft]);
 
   const handleOpen = () => {
     if (isOpen) {
@@ -81,7 +141,7 @@ export default function OrganizePanel({
       const message = await onValidateDeepSeekPrompt();
       setLocalStatus(message);
     } catch (error) {
-      setLocalStatus(error instanceof Error ? error.message : 'DeepSeek validation failed.');
+      setLocalStatus(error instanceof Error ? error.message : 'Validate failed.');
     } finally {
       setIsValidating(false);
     }
@@ -94,7 +154,7 @@ export default function OrganizePanel({
       const message = await onRunFullAiClassification(classificationMode);
       setLocalStatus(message);
     } catch (error) {
-      setLocalStatus(error instanceof Error ? error.message : 'Failed to start AI classification.');
+      setLocalStatus(error instanceof Error ? error.message : 'AI start failed.');
     } finally {
       setIsRunningClassification(false);
     }
@@ -105,8 +165,8 @@ export default function OrganizePanel({
       <button
         type="button"
         className="floating-mode-trigger"
-        aria-label="Open organize tools"
-        title="Open organize tools"
+        aria-label="Open editor"
+        title="Open editor"
         onClick={handleOpen}
       >
         <SlidersHorizontal size={18} strokeWidth={1.8} />
@@ -115,13 +175,13 @@ export default function OrganizePanel({
       {isOpen ? (
         <>
           <div className="organize-popover glass-panel">
-            <div className="organize-shell">
+            <div ref={shellRef} className="organize-shell" onWheelCapture={containPopoverScroll}>
               <div className="organize-header">
-                <div className="organize-title">Organize</div>
+                <div className="organize-title">Edit</div>
                 <button
                   type="button"
                   className="organize-close"
-                  aria-label="Close organize tools"
+                  aria-label="Close editor"
                   onClick={closeOrganizer}
                 >
                   <X size={16} strokeWidth={1.9} />
@@ -129,17 +189,17 @@ export default function OrganizePanel({
               </div>
               <div className="organize-actions">
                 <button type="button" className="bookmark-primary-button" onClick={onCreateCategory}>
-                  Create Category
+                  New Group
                 </button>
-                <button type="button" className="bookmark-primary-button" onClick={onSaveCategories}>
-                  Save Categories
+                <button type="button" className="bookmark-primary-button" onClick={handleSaveCategories}>
+                  Save
                 </button>
-                <button type="button" className="bookmark-secondary-button" onClick={closeOrganizer}>
-                  Discard Draft
+                <button type="button" className="bookmark-secondary-button" onClick={handleDiscardDraft}>
+                  Cancel
                 </button>
               </div>
               <div className="organize-divider" />
-              <div className="organize-section-title">AI Classification</div>
+              <div className="organize-section-title">AI</div>
               <div className="settings-mode-group">
                 <label className="settings-radio">
                   <input
@@ -148,7 +208,7 @@ export default function OrganizePanel({
                     checked={classificationMode === 'overwrite'}
                     onChange={() => setClassificationMode('overwrite')}
                   />
-                  <span>Reclassify All Bookmarks</span>
+                  <span>Sort all</span>
                 </label>
                 <label className="settings-radio">
                   <input
@@ -157,7 +217,7 @@ export default function OrganizePanel({
                     checked={classificationMode === 'unclassified_only'}
                     onChange={() => setClassificationMode('unclassified_only')}
                   />
-                  <span>Add Unclassified to Existing Categories</span>
+                  <span>Sort ungrouped</span>
                 </label>
               </div>
               <div className="organize-actions">
@@ -167,7 +227,7 @@ export default function OrganizePanel({
                   onClick={() => void handleValidate()}
                   disabled={isValidating}
                 >
-                  {isValidating ? 'Validating...' : 'Validate'}
+                  {isValidating ? 'Checking...' : 'Check'}
                 </button>
                 <button
                   type="button"
@@ -175,7 +235,7 @@ export default function OrganizePanel({
                   onClick={() => void handleRunClassification()}
                   disabled={isRunningClassification}
                 >
-                  {isRunningClassification ? 'Processing...' : 'Run AI'}
+                  {isRunningClassification ? 'Running...' : 'Run'}
                 </button>
               </div>
               {localStatus ? <div className="settings-status">{localStatus}</div> : null}

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Luma Tab",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw6U4Ekmj9Ul3n4QZZOLVBKcb+6HfJDNwYYZgP6rQPZkSI8Bk86X3daBG8BSBsxme2mPLrIc/JvljuotivJgzh/IO0l38dpGSMAJHTrbqq7v8Ugp5C/l+dIYdjb9594mWZK5GKrrI7//t6yk3NtRThbryAoswJj0xM6Pfb+S40O7gignQpkQcGUnG22YqfyBSjJK6UGOCorOZLay57md1TXxFf2p0dF2qoodOYUbTx9aQOIMd0oCigCZH7Xltuoy/xXzBVTWwmUxbOcHVCMstGCg8k282+RkE83XsPgda/Nx0KmH5+VYqruzToM3oUHS9rg0qZHZX3/2leVneMFM2DQIDAQAB",
+  "description": "A calm AI-powered new tab with bookmarks, focus, and lightweight organization.",
+  "permissions": ["bookmarks", "storage", "tabs"],
+  "host_permissions": ["https://api.deepseek.com/*"],
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  }
+}
