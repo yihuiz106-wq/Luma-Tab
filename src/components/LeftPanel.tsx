@@ -21,37 +21,55 @@ interface FrequentSite {
   domain: string;
   title: string;
   duration: number;
+  lastUsedAt: number;
   url: string;
 }
 
 const DAILY_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
+const MIN_CONTINUE_DURATION = 3 * 60 * 1000;
+
+function getEntryDomain(entry: TimeLogEntry) {
+  if (entry.domain) {
+    return entry.domain.replace(/^www\./, '');
+  }
+
+  try {
+    return new URL(entry.url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
 
 function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const todayEntries = entries.filter((entry) => entry.date >= startOfToday);
+  const todayEntries = entries.filter((entry) => entry.date >= startOfToday && entry.duration >= MIN_CONTINUE_DURATION);
   const grouped = new Map<string, FrequentSite>();
 
   for (const entry of todayEntries) {
-    const existing = grouped.get(entry.url);
+    const domain = getEntryDomain(entry);
 
-    if (existing) {
-      existing.duration += entry.duration;
-      existing.title = entry.title || existing.title;
+    if (!domain) {
       continue;
     }
 
-    grouped.set(entry.url, {
-      domain: entry.domain || new URL(entry.url).hostname.replace(/^www\./, ''),
+    const existing = grouped.get(domain);
+
+    if (existing && existing.lastUsedAt >= entry.date) {
+      continue;
+    }
+
+    grouped.set(domain, {
+      domain,
       title: entry.title,
       duration: entry.duration,
+      lastUsedAt: entry.date,
       url: entry.url
     });
   }
 
   return [...grouped.values()]
-    .filter((entry) => entry.duration >= 30_000)
-    .sort((a, b) => b.duration - a.duration)
+    .sort((a, b) => b.lastUsedAt - a.lastUsedAt)
     .slice(0, 6);
 }
 
@@ -393,7 +411,7 @@ export default function LeftPanel() {
 
   const deleteContinuePage = async (site: FrequentSite) => {
     const rawTimeLog = await getRawTimeLog();
-    const nextRawTimeLog = rawTimeLog.filter((entry) => entry.url !== site.url);
+    const nextRawTimeLog = rawTimeLog.filter((entry) => getEntryDomain(entry) !== site.domain);
     const nextContinuePages = buildContinuePages(nextRawTimeLog);
 
     setContinuePages(nextContinuePages);
