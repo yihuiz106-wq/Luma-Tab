@@ -1,33 +1,23 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="128" height="128" rx="32" fill="url(#bg)"/>
-  <path
-    d="M38 42C38 37.5817 41.5817 34 46 34H82C86.4183 34 90 37.5817 90 42V86C90 90.4183 86.4183 94 82 94H46C41.5817 94 38 90.4183 38 86V42Z"
-    stroke="white"
-    stroke-opacity="0.92"
-    stroke-width="8"
+  <rect width="128" height="128" rx="32" fill="#EEEAE1"/>
+  <rect x="3" y="3" width="122" height="122" rx="29" stroke="white" stroke-opacity="0.72" stroke-width="6"/>
+  <g
+    transform="translate(20 20) scale(3.6667)"
+    stroke="#4F5E6C"
+    stroke-width="2.5"
     stroke-linecap="round"
     stroke-linejoin="round"
-  />
-  <path
-    d="M46 50H82"
-    stroke="white"
-    stroke-opacity="0.92"
-    stroke-width="8"
-    stroke-linecap="round"
-  />
-  <path
-    d="M52 70L61 79L77 61"
-    stroke="white"
-    stroke-opacity="0.92"
-    stroke-width="8"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <defs>
-    <linearGradient id="bg" x1="108" y1="12" x2="20" y2="118" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#72B9B5"/>
-      <stop offset="0.52" stop-color="#5E9EC6"/>
-      <stop offset="1" stop-color="#446FBA"/>
-    </linearGradient>
-  </defs>
+  >
+    <path d="m10 16 1.5 1.5"/>
+    <path d="m14 8-1.5-1.5"/>
+    <path d="M15 2c-1.798 1.998-2.518 3.995-2.807 5.993"/>
+    <path d="m16.5 10.5 1 1"/>
+    <path d="m17 6-2.891-2.891"/>
+    <path d="M2 15c6.667-6 13.333 0 20-6"/>
+    <path d="m20 9 .891.891"/>
+    <path d="M3.109 14.109 4 15"/>
+    <path d="m6.5 12.5 1 1"/>
+    <path d="m7 18 2.891 2.891"/>
+    <path d="M9 22c1.798-1.998 2.518-3.995 2.807-5.993"/>
+  </g>
 </svg>

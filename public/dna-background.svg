@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 1350" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <filter id="dna-soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.4" />
+    </filter>
+
+    <g id="dna-helix" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path
+        d="M180 -220 C92 -146 92 -52 180 22 C268 96 268 190 180 264 C92 338 92 432 180 506 C268 580 268 674 180 748 C92 822 92 916 180 990 C268 1064 268 1158 180 1232 C92 1306 92 1400 180 1474 C268 1548 268 1642 180 1716"
+        stroke="#fff"
+        stroke-opacity="0.78"
+        stroke-width="10"
+      />
+      <path
+        d="M180 -220 C268 -146 268 -52 180 22 C92 96 92 190 180 264 C268 338 268 432 180 506 C92 580 92 674 180 748 C268 822 268 916 180 990 C92 1064 92 1158 180 1232 C268 1306 268 1400 180 1474 C92 1548 92 1642 180 1716"
+        stroke="#fff"
+        stroke-opacity="0.78"
+        stroke-width="10"
+      />
+
+      <g stroke="#fff" stroke-opacity="0.34" stroke-width="4.6">
+        <path d="M128 -112 C152 -98 208 -78 232 -64" />
+        <path d="M106 -38 C136 -20 224 10 254 28" />
+        <path d="M118 36 C146 54 214 78 242 96" />
+        <path d="M152 110 C164 118 196 130 208 138" />
+        <path d="M118 184 C146 202 214 226 242 244" />
+        <path d="M106 258 C136 276 224 306 254 324" />
+        <path d="M128 332 C152 346 208 366 232 380" />
+        <path d="M150 406 C164 416 196 428 210 438" />
+        <path d="M118 480 C146 498 214 522 242 540" />
+        <path d="M106 554 C136 572 224 602 254 620" />
+        <path d="M128 628 C152 642 208 662 232 676" />
+        <path d="M150 702 C164 712 196 724 210 734" />
+        <path d="M118 776 C146 794 214 818 242 836" />
+        <path d="M106 850 C136 868 224 898 254 916" />
+        <path d="M128 924 C152 938 208 958 232 972" />
+        <path d="M150 998 C164 1008 196 1020 210 1030" />
+        <path d="M118 1072 C146 1090 214 1114 242 1132" />
+        <path d="M106 1146 C136 1164 224 1194 254 1212" />
+        <path d="M128 1220 C152 1234 208 1254 232 1268" />
+        <path d="M150 1294 C164 1304 196 1316 210 1326" />
+        <path d="M118 1368 C146 1386 214 1410 242 1428" />
+        <path d="M106 1442 C136 1460 224 1490 254 1508" />
+      </g>
+    </g>
+  </defs>
+
+  <rect width="2400" height="1350" fill="#f0efeb" />
+
+  <g filter="url(#dna-soft)">
+    <g opacity="0.34" transform="translate(-120 -470) rotate(25 180 760) scale(1.58)">
+      <use href="#dna-helix" />
+    </g>
+    <g opacity="0.38" transform="translate(1895 -235) rotate(-4 180 760) scale(1.13 1.2)">
+      <use href="#dna-helix" />
+    </g>
+  </g>
+</svg>
