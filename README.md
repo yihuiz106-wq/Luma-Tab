@@ -4,6 +4,12 @@ Luma Tab 是一个用于替换 Chrome 新标签页的扩展，目标是把「常
 
 项目当前基于 `React + TypeScript + Vite` 开发，并通过 Chrome Extension Manifest V3 运行。
 
+## 界面示意
+
+下面这张图基于项目实际截图整理，并只保留适合公开展示的界面内容。它主要用来展示布局、层级和交互区域，不包含账号信息、地址栏历史或其他敏感数据。
+
+![Luma Tab privacy-safe demo](docs/readme-demo.svg)
+
 ## 功能特性
 
 - 替换 Chrome 新标签页
@@ -123,10 +129,98 @@ npm run preview
 
 这适合重装扩展、切换设备或备份分类结果时使用。
 
+## 左侧栏逻辑
+
+左侧栏由 [`src/components/LeftPanel.tsx`](/Users/zyh/Projects/Luma%20Tab/src/components/LeftPanel.tsx) 驱动，核心目标是把“我主动固定的重要入口”和“我最近可能还要继续看的页面”同时放到视线最短路径上。
+
+### 1. 两块数据，各自解决不同问题
+
+- `Common Entrances` 对应 `pinnedPages`
+  - 数据来源是本地存储里的固定页面列表，读取函数是 [`getPinnedPages()`](/Users/zyh/Projects/Luma%20Tab/src/lib/storage.ts)
+  - 这部分是用户显式维护的快捷入口，强调稳定和可控
+- `Continue Browsing` 对应 `rawTimeLog`
+  - 数据来源是浏览记录时间日志，读取函数是 [`getRawTimeLog()`](/Users/zyh/Projects/Luma%20Tab/src/lib/storage.ts)
+  - 组件会先过滤停留时间太短的记录，再按域名聚合，最后只保留每个站点最近一次值得继续的页面
+
+### 2. Continue 区域如何算出来
+
+左侧栏里有两个关键辅助函数：
+
+- `getEntryDomain(entry)`
+  - 优先使用日志里已有的 `domain`
+  - 如果没有，就从 URL 里解析 hostname，并去掉 `www.`
+- `buildContinuePages(entries)`
+  - 先过滤掉停留时间不足 `3 * 60 * 1000` 毫秒的记录
+  - 再按域名分组，只保留每个域名最新的一条
+  - 最后按最近访问时间倒序排列，并截断为最多 6 条
+
+这意味着左侧栏不会简单地把所有历史访问都堆出来，而是更偏向“最近真正使用过、值得继续打开的页面”。
+
+### 3. 标题显示不是单一来源，而是三层兜底
+
+左侧栏显示名称时，不直接相信单一字段，而是做了分层回退：
+
+- 固定页名称优先级：`customName -> urlNameCache[url] -> bookmarkTitleByUrl[url] -> 原始 title`
+- Continue 名称优先级：`urlNameCache[url] -> bookmarkTitleByUrl[url] -> 访问记录里的 title`
+
+这套逻辑的价值是：
+
+- 用户手动改过的名字永远优先
+- 如果某个页面名称被 AI 简化过，可以复用到多个位置
+- 即使没有缓存，也还能退回浏览器书签标题或原始页面标题
+
+### 4. 为什么会去读全部书签
+
+组件初始化时不仅会读取固定页、时间日志和名称缓存，也会调用 `getAllBookmarks()`。原因不是为了重新渲染整个书签墙，而是为了做两件事：
+
+- 把 `pinnedPages` 和最新书签数据对齐，避免固定页标题、URL 已经变化但侧栏没更新
+- 构造 `bookmarkTitleByUrl`，作为左侧栏名称展示的一个兜底数据源
+
+代码里 `syncPinnedPagesWithBookmarks(...)` 就负责这一步同步。
+
+### 5. DeepSeek 在左侧栏里做什么
+
+左侧栏并不负责“整站分类”，但会调用 `simplifyPageNamesWithDeepSeek(...)` 做一件很实用的小事：把 Continue 区域里难读、太长或不稳定的页面标题改成更适合快速识别的短名称。
+
+这个过程有几个约束：
+
+- 只处理 `urlNameCache` 里还没有命中的页面
+- 只有用户配置了 DeepSeek API Key 才会触发
+- 结果会写回 `urlNameCache`，所以下次进入页面不需要重复请求
+- 组件内部用 `isRefreshingContinueNamesRef` 和 `pendingContinuePagesRef` 避免重复并发刷新
+
+换句话说，左侧栏里的 AI 不是“决定看什么”，而是“把已经值得继续看的页面命名得更顺手”。
+
+### 6. 左侧栏如何保持实时同步
+
+这个组件做了两层监听：
+
+- 监听 `chrome.bookmarks` 事件
+  - 当书签新增、删除、修改时，重新拉取书签并同步 `pinnedPages`
+- 监听 `chrome.storage.onChanged`
+  - `pinnedPages` 变化时，直接刷新固定入口
+  - `urlNameCache` 变化时，刷新展示名称
+  - `rawTimeLog` 变化时，重新计算 Continue 列表，并在必要时触发名称简化
+
+这让左侧栏即使不刷新整个页面，也能跟上后台追踪、设置修改和书签变动。
+
+### 7. 左侧栏支持哪些交互
+
+- 点击卡片：直接打开目标页面
+- Continue 卡片点击图钉：加入 `Common Entrances`
+- 固定页点击取消固定：从 `pinnedPages` 移除
+- 两类卡片都支持更多操作菜单
+  - 可编辑自定义名称
+  - Continue 项可从时间日志里移除对应域名记录
+- 编辑名称时支持 `Enter` 保存、`Escape` 取消、失焦自动保存
+
+整体上，左侧栏的设计取向不是做成第二个完整书签管理器，而是做成一个“轻量、即时、低打扰”的恢复工作区入口。
+
 ## 项目结构
 
 ```text
 .
+├── docs/                   # README 使用的脱敏示意图等文档资源
 ├── public/                 # 扩展清单、图标和静态资源
 ├── release/                # 已打包的发布版本
 ├── src/
