@@ -255,4 +255,4 @@ npm run preview
 
 ## License
 
-当前仓库未声明开源许可证。如需开源发布，建议补充 `LICENSE` 文件。
+This project is licensed under the MIT License. See [LICENSE](/Users/zyh/Projects/Luma%20Tab/LICENSE).
