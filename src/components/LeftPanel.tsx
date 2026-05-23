@@ -6,11 +6,9 @@ import { getAllBookmarks } from '../lib/bookmarks';
 import { simplifyPageNamesWithDeepSeek } from '../lib/deepseek';
 import {
   getDeepSeekApiKey,
-  getLastUpdateTime,
   getPinnedPages,
   getRawTimeLog,
   getUrlNameCache,
-  saveLastUpdateTime,
   savePinnedPages,
   saveRawTimeLog,
   saveUrlNameCache
@@ -25,7 +23,6 @@ interface FrequentSite {
   url: string;
 }
 
-const DAILY_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
 const MIN_CONTINUE_DURATION = 3 * 60 * 1000;
 
 function getEntryDomain(entry: TimeLogEntry) {
@@ -41,12 +38,10 @@ function getEntryDomain(entry: TimeLogEntry) {
 }
 
 function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const todayEntries = entries.filter((entry) => entry.date >= startOfToday && entry.duration >= MIN_CONTINUE_DURATION);
+  const eligibleEntries = entries.filter((entry) => entry.duration >= MIN_CONTINUE_DURATION);
   const grouped = new Map<string, FrequentSite>();
 
-  for (const entry of todayEntries) {
+  for (const entry of eligibleEntries) {
     const domain = getEntryDomain(entry);
 
     if (!domain) {
@@ -108,15 +103,75 @@ export default function LeftPanel() {
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const isRefreshingContinueNamesRef = useRef(false);
+  const pendingContinuePagesRef = useRef<FrequentSite[] | null>(null);
+
+  const refreshContinuePageNames = async (
+    nextContinuePages: FrequentSite[],
+    storedUrlNameCache: Record<string, string>,
+    deepseekApiKey: string
+  ) => {
+    pendingContinuePagesRef.current = nextContinuePages;
+
+    if (isRefreshingContinueNamesRef.current) {
+      return;
+    }
+
+    isRefreshingContinueNamesRef.current = true;
+
+    try {
+      while (pendingContinuePagesRef.current) {
+        const pagesToRefresh = pendingContinuePagesRef.current;
+        pendingContinuePagesRef.current = null;
+
+        const missingSites = pagesToRefresh
+          .filter((site) => !storedUrlNameCache[site.url])
+          .map((site) => ({
+            title: site.title,
+            url: site.url
+          }));
+
+        if (missingSites.length === 0 || !deepseekApiKey.trim()) {
+          continue;
+        }
+
+        try {
+          const simplifiedNames = await simplifyPageNamesWithDeepSeek(deepseekApiKey, missingSites);
+
+          if (Object.keys(simplifiedNames).length === 0) {
+            continue;
+          }
+
+          storedUrlNameCache = {
+            ...storedUrlNameCache,
+            ...simplifiedNames
+          };
+
+          setUrlNameCache(storedUrlNameCache);
+          setPinnedPages((currentPinnedPages) =>
+            currentPinnedPages.map((item) => ({
+              ...item,
+              customName: storedUrlNameCache[item.url] ?? item.customName
+            }))
+          );
+
+          await saveUrlNameCache(storedUrlNameCache);
+        } catch {
+          // Keep the sidebar responsive even if name simplification fails.
+        }
+      }
+    } finally {
+      isRefreshingContinueNamesRef.current = false;
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadLeftPanel() {
-      const [storedPinnedPages, rawTimeLog, lastUpdateTime, storedUrlNameCache, deepseekApiKey, bookmarks] = await Promise.all([
+      const [storedPinnedPages, rawTimeLog, storedUrlNameCache, deepseekApiKey, bookmarks] = await Promise.all([
         getPinnedPages(),
         getRawTimeLog(),
-        getLastUpdateTime(),
         getUrlNameCache(),
         getDeepSeekApiKey(),
         getAllBookmarks()
@@ -133,9 +188,7 @@ export default function LeftPanel() {
       setUrlNameCache(storedUrlNameCache);
       setBookmarkTitleByUrl(nextBookmarkTitleByUrl);
 
-      if (Date.now() - lastUpdateTime > DAILY_UPDATE_INTERVAL) {
-        void refreshContinuePageNames(nextContinuePages, storedUrlNameCache, deepseekApiKey);
-      }
+      void refreshContinuePageNames(nextContinuePages, storedUrlNameCache, deepseekApiKey);
     }
 
     void loadLeftPanel();
@@ -241,7 +294,12 @@ export default function LeftPanel() {
       }
 
       if (changes.rawTimeLog?.newValue && Array.isArray(changes.rawTimeLog.newValue)) {
-        setContinuePages(buildContinuePages(changes.rawTimeLog.newValue as TimeLogEntry[]));
+        const nextContinuePages = buildContinuePages(changes.rawTimeLog.newValue as TimeLogEntry[]);
+        setContinuePages(nextContinuePages);
+
+        void Promise.all([getUrlNameCache(), getDeepSeekApiKey()]).then(([storedUrlNameCache, deepseekApiKey]) =>
+          refreshContinuePageNames(nextContinuePages, storedUrlNameCache, deepseekApiKey)
+        );
       }
     };
 
@@ -254,50 +312,6 @@ export default function LeftPanel() {
 
   const openBookmark = (url: string) => {
     window.location.href = url;
-  };
-
-  const refreshContinuePageNames = async (
-    nextContinuePages: FrequentSite[],
-    storedUrlNameCache: Record<string, string>,
-    deepseekApiKey: string
-  ) => {
-    const missingSites = nextContinuePages
-      .filter((site) => !storedUrlNameCache[site.url])
-      .map((site) => ({
-        title: site.title,
-        url: site.url
-      }));
-
-    if (missingSites.length === 0 || !deepseekApiKey.trim()) {
-      await saveLastUpdateTime(Date.now());
-      return;
-    }
-
-    try {
-      const simplifiedNames = await simplifyPageNamesWithDeepSeek(deepseekApiKey, missingSites);
-
-      if (Object.keys(simplifiedNames).length === 0) {
-        await saveLastUpdateTime(Date.now());
-        return;
-      }
-
-      const nextUrlNameCache = {
-        ...storedUrlNameCache,
-        ...simplifiedNames
-      };
-
-      setUrlNameCache(nextUrlNameCache);
-      setPinnedPages((currentPinnedPages) =>
-        currentPinnedPages.map((item) => ({
-          ...item,
-          customName: nextUrlNameCache[item.url] ?? item.customName
-        }))
-      );
-
-      await Promise.all([saveUrlNameCache(nextUrlNameCache), saveLastUpdateTime(Date.now())]);
-    } catch {
-      await saveLastUpdateTime(Date.now());
-    }
   };
 
   const handleUnpin = async (bookmarkId: string) => {
