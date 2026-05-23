@@ -6,9 +6,9 @@ Luma Tab 是一个用于替换 Chrome 新标签页的扩展，目标是把「常
 
 ## 界面示意
 
-下面这张图基于项目实际截图整理，并只保留适合公开展示的界面内容。它主要用来展示布局、层级和交互区域，不包含账号信息、地址栏历史或其他敏感数据。
+下面这张图直接使用项目当前界面的真实截图，用来展示整体布局、左侧继续浏览区域和右侧分组书签面板的实际效果。
 
-![Luma Tab privacy-safe demo](docs/readme-demo.svg)
+![Luma Tab case screenshot](docs/readme-case.png)
 
 ## 功能特性
 
