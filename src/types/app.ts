@@ -47,6 +47,7 @@ export interface AppStorageShape {
   uiSettings: UiSettings;
   bookmarkPanelState: BookmarkPanelState;
   pinnedPages?: PinnedPage[];
+  hiddenLeftPanelDomains?: string[];
   urlNameCache?: Record<string, string>;
   bookmarkMetadata?: BookmarkMetadataMap;
   autoClassifyFailedIds?: string[];
@@ -59,6 +60,7 @@ export interface AppDataExport {
   uiSettings: UiSettings;
   bookmarkPanelState: BookmarkPanelState;
   pinnedPages: PinnedPage[];
+  hiddenLeftPanelDomains: string[];
   urlNameCache: Record<string, string>;
   bookmarkMetadata: BookmarkMetadataMap;
   autoClassifyFailedIds: string[];

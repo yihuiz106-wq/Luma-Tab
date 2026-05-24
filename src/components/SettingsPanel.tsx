@@ -3,16 +3,20 @@ import { type WheelEvent as ReactWheelEvent, useEffect, useRef, useState } from 
 
 interface SettingsPanelProps {
   deepseekApiKey: string;
+  hiddenLeftPanelDomains: string[];
   onDeepSeekApiKeyChange: (value: string) => Promise<void>;
   onClearDeepSeekApiKey: () => Promise<void>;
+  onUnhideLeftPanelDomain: (domain: string) => Promise<void>;
   onExportData: () => Promise<void>;
   onImportData: (file: File) => Promise<void>;
 }
 
 export default function SettingsPanel({
   deepseekApiKey,
+  hiddenLeftPanelDomains,
   onDeepSeekApiKeyChange,
   onClearDeepSeekApiKey,
+  onUnhideLeftPanelDomain,
   onExportData,
   onImportData
 }: SettingsPanelProps) {
@@ -248,6 +252,35 @@ export default function SettingsPanel({
                       />
                     </label>
                   </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <div className="settings-section-header">
+                  <div className="settings-section-title">Left Sidebar Hidden Domains</div>
+                  <div className="settings-section-description">
+                    Hidden domains will not appear in Common Entrances or Continue Browsing.
+                  </div>
+                </div>
+                <div className="settings-actions-column">
+                  {hiddenLeftPanelDomains.length > 0 ? (
+                    <div className="settings-token-list">
+                      {hiddenLeftPanelDomains.map((domain) => (
+                        <div key={domain} className="settings-token-row">
+                          <span className="settings-token-label">{domain}</span>
+                          <button
+                            type="button"
+                            className="settings-secondary-button settings-token-button"
+                            onClick={() => void onUnhideLeftPanelDomain(domain)}
+                          >
+                            Unhide
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="settings-note">No hidden domains yet.</div>
+                  )}
                 </div>
               </section>
 

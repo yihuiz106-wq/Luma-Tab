@@ -18,6 +18,7 @@ const MIN_TRACKED_DURATION = 15_000;
 const MAX_LOG_AGE = 72 * 60 * 60 * 1000;
 
 let activeSession: ActiveTrackedSession | null = null;
+let isBrowserWindowFocused = false;
 
 function isTrackableUrl(url?: string) {
   return typeof url === 'string' && /^https?:\/\//.test(url);
@@ -70,6 +71,12 @@ async function flushActiveSession(endedAt = Date.now()) {
 }
 
 async function startSessionFromTab(tabId: number, tab: chrome.tabs.Tab) {
+  if (!isBrowserWindowFocused) {
+    activeSession = null;
+    await clearActiveTrackedSession();
+    return;
+  }
+
   if (!tab.url || !isTrackableUrl(tab.url)) {
     activeSession = null;
     await clearActiveTrackedSession();
@@ -87,6 +94,10 @@ async function startSessionFromTab(tabId: number, tab: chrome.tabs.Tab) {
 }
 
 async function activateTab(tabId: number) {
+  if (!isBrowserWindowFocused) {
+    return;
+  }
+
   chrome.tabs.get(tabId, async (tab) => {
     await flushActiveSession();
     await startSessionFromTab(tabId, tab);
@@ -99,10 +110,12 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 
 chrome.windows.onFocusChanged.addListener((windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
+    isBrowserWindowFocused = false;
     void flushActiveSession();
     return;
   }
 
+  isBrowserWindowFocused = true;
   chrome.tabs.query({ active: true, windowId }, async (tabs) => {
     const activeTab = tabs[0];
 
@@ -116,21 +129,30 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   });
 });
 
-chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-  const activeTab = tabs[0];
-
-  if (!activeTab?.id) {
+chrome.windows.getLastFocused(async (window) => {
+  if (!window.id || !window.focused) {
+    isBrowserWindowFocused = false;
+    await flushActiveSession();
     return;
   }
 
-  const persistedSession = await getActiveTrackedSession();
+  isBrowserWindowFocused = true;
+  chrome.tabs.query({ active: true, windowId: window.id }, async (tabs) => {
+    const activeTab = tabs[0];
 
-  if (persistedSession) {
-    activeSession = persistedSession;
-    return;
-  }
+    if (!activeTab?.id) {
+      return;
+    }
 
-  await startSessionFromTab(activeTab.id, activeTab);
+    const persistedSession = await getActiveTrackedSession();
+
+    if (persistedSession) {
+      activeSession = persistedSession;
+      return;
+    }
+
+    await startSessionFromTab(activeTab.id, activeTab);
+  });
 });
 
 chrome.bookmarks.onCreated.addListener(async (_id: string, bookmark: chrome.bookmarks.BookmarkTreeNode) => {

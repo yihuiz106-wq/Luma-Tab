@@ -1,14 +1,15 @@
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from 'react';
 import { MoreHorizontal, Pin, PinOff } from 'lucide-react';
-import { createPortal } from 'react-dom';
 import FaviconImage from './FaviconImage';
 import { getAllBookmarks } from '../lib/bookmarks';
 import { simplifyPageNamesWithDeepSeek } from '../lib/deepseek';
 import {
   getDeepSeekApiKey,
+  getHiddenLeftPanelDomains,
   getPinnedPages,
   getRawTimeLog,
   getUrlNameCache,
+  saveHiddenLeftPanelDomains,
   savePinnedPages,
   saveRawTimeLog,
   saveUrlNameCache
@@ -19,29 +20,46 @@ interface FrequentSite {
   domain: string;
   title: string;
   duration: number;
+  totalDuration: number;
   lastUsedAt: number;
   url: string;
 }
 
 const MIN_CONTINUE_DURATION = 3 * 60 * 1000;
+const CONTINUE_SCORE_DURATION_CAP = 3 * 60 * 60 * 1000;
+const CONTINUE_RECENCY_WEIGHT = 0.75;
+const CONTINUE_DURATION_WEIGHT = 0.25;
 
 function getEntryDomain(entry: TimeLogEntry) {
   if (entry.domain) {
-    return entry.domain.replace(/^www\./, '');
+    return normalizeDomain(entry.domain);
   }
 
   try {
-    return new URL(entry.url).hostname.replace(/^www\./, '');
+    return normalizeDomain(new URL(entry.url).hostname);
+  } catch {
+    return '';
+  }
+}
+
+function normalizeDomain(value: string) {
+  return value.trim().replace(/^www\./, '').toLowerCase();
+}
+
+function getUrlDomain(url: string) {
+  try {
+    return normalizeDomain(new URL(url).hostname);
   } catch {
     return '';
   }
 }
 
 function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
-  const eligibleEntries = entries.filter((entry) => entry.duration >= MIN_CONTINUE_DURATION);
   const grouped = new Map<string, FrequentSite>();
+  const now = Date.now();
+  const maxLogAge = 72 * 60 * 60 * 1000;
 
-  for (const entry of eligibleEntries) {
+  for (const entry of entries) {
     const domain = getEntryDomain(entry);
 
     if (!domain) {
@@ -50,21 +68,52 @@ function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
 
     const existing = grouped.get(domain);
 
-    if (existing && existing.lastUsedAt >= entry.date) {
+    if (!existing) {
+      grouped.set(domain, {
+        domain,
+        title: entry.title,
+        duration: entry.duration,
+        totalDuration: entry.duration,
+        lastUsedAt: entry.date,
+        url: entry.url
+      });
       continue;
     }
 
-    grouped.set(domain, {
-      domain,
-      title: entry.title,
-      duration: entry.duration,
-      lastUsedAt: entry.date,
-      url: entry.url
-    });
+    existing.totalDuration += entry.duration;
+
+    if (entry.date > existing.lastUsedAt) {
+      existing.lastUsedAt = entry.date;
+      existing.title = entry.title;
+      existing.url = entry.url;
+      existing.duration = entry.duration;
+    }
   }
 
-  return [...grouped.values()]
-    .sort((a, b) => b.lastUsedAt - a.lastUsedAt)
+  const eligibleSites = [...grouped.values()].filter((site) => site.totalDuration >= MIN_CONTINUE_DURATION);
+
+  const scoreSite = (site: FrequentSite) => {
+    const recencyAge = Math.max(0, now - site.lastUsedAt);
+    const recencyScore = Math.max(0, 1 - recencyAge / maxLogAge);
+    const durationScore = Math.min(site.totalDuration / CONTINUE_SCORE_DURATION_CAP, 1);
+
+    return recencyScore * CONTINUE_RECENCY_WEIGHT + durationScore * CONTINUE_DURATION_WEIGHT;
+  };
+
+  return eligibleSites
+    .sort((a, b) => {
+      const scoreDiff = scoreSite(b) - scoreSite(a);
+
+      if (Math.abs(scoreDiff) > 0.02) {
+        return scoreDiff;
+      }
+
+      if (b.lastUsedAt !== a.lastUsedAt) {
+        return b.lastUsedAt - a.lastUsedAt;
+      }
+
+      return b.totalDuration - a.totalDuration;
+    })
     .slice(0, 6);
 }
 
@@ -90,14 +139,13 @@ function syncPinnedPagesWithBookmarks(pinnedPages: PinnedPage[], bookmarks: Arra
 export default function LeftPanel() {
   const [pinnedPages, setPinnedPages] = useState<PinnedPage[]>([]);
   const [continuePages, setContinuePages] = useState<FrequentSite[]>([]);
+  const [hiddenDomains, setHiddenDomains] = useState<string[]>([]);
   const [urlNameCache, setUrlNameCache] = useState<Record<string, string>>({});
   const [bookmarkTitleByUrl, setBookmarkTitleByUrl] = useState<Record<string, string>>({});
   const [editingItem, setEditingItem] = useState<{ kind: 'pinned' | 'continue'; id: string } | null>(null);
   const [menuState, setMenuState] = useState<{
     kind: 'pinned' | 'continue';
     id: string;
-    x: number;
-    y: number;
   } | null>(null);
   const [draftName, setDraftName] = useState('');
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -169,9 +217,10 @@ export default function LeftPanel() {
     let isMounted = true;
 
     async function loadLeftPanel() {
-      const [storedPinnedPages, rawTimeLog, storedUrlNameCache, deepseekApiKey, bookmarks] = await Promise.all([
+      const [storedPinnedPages, rawTimeLog, storedHiddenDomains, storedUrlNameCache, deepseekApiKey, bookmarks] = await Promise.all([
         getPinnedPages(),
         getRawTimeLog(),
+        getHiddenLeftPanelDomains(),
         getUrlNameCache(),
         getDeepSeekApiKey(),
         getAllBookmarks()
@@ -185,6 +234,7 @@ export default function LeftPanel() {
 
       setPinnedPages(syncPinnedPagesWithBookmarks(storedPinnedPages, bookmarks));
       setContinuePages(nextContinuePages);
+      setHiddenDomains(storedHiddenDomains.map(normalizeDomain).filter(Boolean));
       setUrlNameCache(storedUrlNameCache);
       setBookmarkTitleByUrl(nextBookmarkTitleByUrl);
 
@@ -285,15 +335,19 @@ export default function LeftPanel() {
         return;
       }
 
-      if (changes.pinnedPages?.newValue && Array.isArray(changes.pinnedPages.newValue)) {
+      if ('pinnedPages' in changes && Array.isArray(changes.pinnedPages?.newValue)) {
         setPinnedPages(changes.pinnedPages.newValue as PinnedPage[]);
       }
 
-      if (changes.urlNameCache?.newValue && typeof changes.urlNameCache.newValue === 'object') {
+      if ('hiddenLeftPanelDomains' in changes && Array.isArray(changes.hiddenLeftPanelDomains?.newValue)) {
+        setHiddenDomains((changes.hiddenLeftPanelDomains?.newValue as string[]).map(normalizeDomain).filter(Boolean));
+      }
+
+      if ('urlNameCache' in changes && changes.urlNameCache?.newValue && typeof changes.urlNameCache.newValue === 'object') {
         setUrlNameCache(changes.urlNameCache.newValue as Record<string, string>);
       }
 
-      if (changes.rawTimeLog?.newValue && Array.isArray(changes.rawTimeLog.newValue)) {
+      if ('rawTimeLog' in changes && Array.isArray(changes.rawTimeLog?.newValue)) {
         const nextContinuePages = buildContinuePages(changes.rawTimeLog.newValue as TimeLogEntry[]);
         setContinuePages(nextContinuePages);
 
@@ -312,6 +366,20 @@ export default function LeftPanel() {
 
   const openBookmark = (url: string) => {
     window.location.href = url;
+  };
+
+  const hideLeftPanelDomain = async (domain: string) => {
+    const normalizedDomain = normalizeDomain(domain);
+
+    if (!normalizedDomain || hiddenDomains.includes(normalizedDomain)) {
+      setMenuState(null);
+      return;
+    }
+
+    const nextHiddenDomains = [...hiddenDomains, normalizedDomain].sort();
+    setHiddenDomains(nextHiddenDomains);
+    setMenuState(null);
+    await saveHiddenLeftPanelDomains(nextHiddenDomains);
   };
 
   const handleUnpin = async (bookmarkId: string) => {
@@ -353,23 +421,14 @@ export default function LeftPanel() {
   const openActionMenu = (event: React.MouseEvent<HTMLElement>, kind: 'pinned' | 'continue', id: string) => {
     event.preventDefault();
     event.stopPropagation();
-    const menuWidth = 148;
-    const viewportPadding = 12;
-    const left = Math.min(
-      window.innerWidth - menuWidth - viewportPadding,
-      Math.max(viewportPadding, event.clientX)
-    );
-    const top = Math.min(window.innerHeight - 120, event.clientY);
 
     setMenuState((current) =>
       current?.kind === kind && current.id === id
         ? null
         : {
-            kind,
-            id,
-            x: left,
-            y: top
-          }
+          kind,
+          id
+        }
     );
   };
 
@@ -463,6 +522,10 @@ export default function LeftPanel() {
     return site.title;
   };
 
+  const hiddenDomainSet = new Set(hiddenDomains);
+  const visiblePinnedPages = pinnedPages.filter((item) => !hiddenDomainSet.has(getUrlDomain(item.url)));
+  const visibleContinuePages = continuePages.filter((site) => !hiddenDomainSet.has(normalizeDomain(site.domain)));
+
   return (
     <div className="left-panel">
       <div className="left-panel-block">
@@ -470,8 +533,8 @@ export default function LeftPanel() {
           <div className="left-panel-title">Common Entrances</div>
         </div>
         <div className="left-panel-list">
-          {pinnedPages.length > 0 ? (
-            pinnedPages.map((item) => (
+          {visiblePinnedPages.length > 0 ? (
+            visiblePinnedPages.map((item) => (
               <div
                 key={item.id}
                 className="item-card left-item-card"
@@ -529,6 +592,33 @@ export default function LeftPanel() {
                     <PinOff size={14} strokeWidth={1.8} />
                   </button>
                 </span>
+                {menuState?.kind === 'pinned' && menuState.id === item.id ? (
+                  <div
+                    ref={menuRef}
+                    className="action-menu"
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="action-menu-item"
+                      onClick={() => {
+                        startEditing('pinned', item.id, getPinnedDisplayName(item.title, item.url, item.customName));
+                        setMenuState(null);
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      className="action-menu-item"
+                      onClick={() => {
+                        void hideLeftPanelDomain(getUrlDomain(item.url));
+                      }}
+                    >
+                      Hide Domain
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ))
           ) : (
@@ -542,8 +632,8 @@ export default function LeftPanel() {
           <div className="left-panel-title">Continue Browsing</div>
         </div>
         <div className="left-panel-list">
-          {continuePages.length > 0 ? (
-            continuePages.map((site) => (
+          {visibleContinuePages.length > 0 ? (
+            visibleContinuePages.map((site) => (
               <div
                 key={site.url}
                 className="item-card left-item-card"
@@ -613,6 +703,43 @@ export default function LeftPanel() {
                     );
                   })()}
                 </span>
+                {menuState?.kind === 'continue' && menuState.id === site.url ? (
+                  <div
+                    ref={menuRef}
+                    className="action-menu"
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="action-menu-item"
+                      onClick={() => {
+                        startEditing('continue', site.url, getContinueDisplayName(site));
+                        setMenuState(null);
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      className="action-menu-item"
+                      onClick={() => {
+                        void hideLeftPanelDomain(site.domain);
+                      }}
+                    >
+                      Hide Domain
+                    </button>
+                    <button
+                      type="button"
+                      className="action-menu-item action-menu-item-danger"
+                      onClick={() => {
+                        void deleteContinuePage(site);
+                        setMenuState(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ))
           ) : (
@@ -620,58 +747,6 @@ export default function LeftPanel() {
           )}
         </div>
       </div>
-      {menuState
-        ? createPortal(
-            <div
-              ref={menuRef}
-              className="action-menu"
-              style={{ left: menuState.x, top: menuState.y }}
-              onMouseDown={(event) => event.stopPropagation()}
-            >
-              <button
-                type="button"
-                className="action-menu-item"
-                onClick={() => {
-                  if (menuState.kind === 'pinned') {
-                    const target = pinnedPages.find((item) => item.id === menuState.id);
-
-                    if (target) {
-                      startEditing('pinned', target.id, getPinnedDisplayName(target.title, target.url, target.customName));
-                    }
-                  } else {
-                    const target = continuePages.find((site) => site.url === menuState.id);
-
-                    if (target) {
-                      startEditing('continue', target.url, getContinueDisplayName(target));
-                    }
-                  }
-
-                  setMenuState(null);
-                }}
-              >
-                Rename
-              </button>
-              {menuState.kind === 'continue' ? (
-                <button
-                  type="button"
-                  className="action-menu-item action-menu-item-danger"
-                  onClick={() => {
-                    const target = continuePages.find((site) => site.url === menuState.id);
-
-                    if (target) {
-                      void deleteContinuePage(target);
-                    }
-
-                    setMenuState(null);
-                  }}
-                >
-                  Delete
-                </button>
-              ) : null}
-            </div>,
-            document.body
-          )
-        : null}
     </div>
   );
 }

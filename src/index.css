@@ -81,9 +81,11 @@ body {
 }
 
 .item-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow: visible;
   padding: 12px 16px;
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 8px;
@@ -381,11 +383,11 @@ body {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.84);
-  border-radius: 9px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.72);
   color: #98a2b3;
   cursor: grab;
@@ -405,6 +407,11 @@ body {
 
 .category-drag-handle {
   margin-right: 2px;
+}
+
+.bookmark-drag-handle svg {
+  width: 11px;
+  height: 11px;
 }
 
 .bookmark-section-toggle-icon:hover .bookmark-section-chevron {
@@ -631,6 +638,7 @@ body {
   justify-content: space-between;
   width: 100%;
   min-height: 60px;
+  overflow: visible;
   padding: 10px 12px;
   cursor: default;
 }
@@ -736,33 +744,26 @@ body {
 }
 
 .bookmark-editor-popover {
-  position: fixed;
+  position: absolute;
+  top: calc(100% + 8px);
   z-index: 420;
-  width: min(286px, calc(100vw - 96px));
-  max-height: min(70vh, 420px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  width: min(248px, calc(100vw - 96px));
+  overflow: hidden;
+  overscroll-behavior: none;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(16px) saturate(180%);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    rgba(0, 0, 0, 0.92) 12px,
-    rgba(0, 0, 0, 0.92) calc(100% - 12px),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    rgba(0, 0, 0, 0.92) 12px,
-    rgba(0, 0, 0, 0.92) calc(100% - 12px),
-    transparent 100%
-  );
+}
+
+.bookmark-editor-popover.align-start {
+  left: 0;
+}
+
+.bookmark-editor-popover.align-end {
+  right: 0;
 }
 
 .bookmark-editor-header {
@@ -837,7 +838,9 @@ body {
 }
 
 .action-menu {
-  position: fixed;
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 0;
   z-index: 400;
   min-width: 148px;
   max-height: min(60vh, 260px);
@@ -851,20 +854,6 @@ body {
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    rgba(0, 0, 0, 0.94) 10px,
-    rgba(0, 0, 0, 0.94) calc(100% - 10px),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    rgba(0, 0, 0, 0.94) 10px,
-    rgba(0, 0, 0, 0.94) calc(100% - 10px),
-    transparent 100%
-  );
 }
 
 .action-menu-item {
@@ -1085,18 +1074,18 @@ body {
 .organize-popover {
   position: fixed;
   top: 128px;
-  right: 24px;
+  right: 12px;
   z-index: 117;
-  width: min(260px, calc(100vw - 48px));
+  width: min(212px, calc(100vw - 24px));
   max-height: calc(100vh - 152px);
   overflow: hidden;
-  padding: 18px;
+  padding: 14px;
 }
 
 .organize-shell {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-height: 0;
   max-height: calc(100vh - 188px);
   overflow-y: auto;
@@ -1141,15 +1130,15 @@ body {
 .organize-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .settings-popover {
   position: fixed;
   top: 78px;
-  right: 24px;
+  right: 12px;
   z-index: 119;
-  width: min(328px, calc(100vw - 48px));
+  width: min(272px, calc(100vw - 24px));
   max-height: calc(100vh - 96px);
   overflow: hidden;
 }
@@ -1165,7 +1154,7 @@ body {
 .settings-shell {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-height: 0;
   max-height: calc(100vh - 144px);
   overflow-y: auto;
@@ -1178,7 +1167,7 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .settings-title {
@@ -1211,8 +1200,8 @@ body {
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.42);
@@ -1310,7 +1299,7 @@ body {
 .settings-button-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .settings-button-grid.compact {
@@ -1337,8 +1326,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 10px;
   border-radius: 10px;
   font-size: 13px;
   cursor: pointer;
@@ -1371,8 +1360,8 @@ body {
 
 .settings-text-input {
   width: 100%;
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.78);
@@ -1386,6 +1375,39 @@ body {
   color: #667085;
   font-size: 12px;
   line-height: 1.6;
+}
+
+.settings-token-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-token-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.settings-token-label {
+  min-width: 0;
+  overflow: hidden;
+  color: #344054;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-token-button {
+  min-height: 32px;
+  padding: 0 12px;
+  flex-shrink: 0;
 }
 
 .settings-status {

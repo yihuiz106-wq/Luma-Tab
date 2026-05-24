@@ -19,7 +19,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, MoreHorizontal, PencilLine, Trash2, X } from 'lucide-react';
 import { type WheelEvent as ReactWheelEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import FaviconImage from './FaviconImage';
 import { getAllBookmarks, removeBookmark } from '../lib/bookmarks';
 import {
@@ -44,6 +43,7 @@ import type {
 
 const UNCLASSIFIED_CATEGORY_ID = 'unclassified';
 const UNCLASSIFIED_CATEGORY_TITLE = 'Unclassified';
+const BOOKMARK_EDITOR_POPOVER_WIDTH = 248;
 
 interface SortableCategorySectionProps {
   category: BookmarkCategory;
@@ -231,8 +231,7 @@ function SortableBookmarkCard({
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
-  const [actionMenuPosition, setActionMenuPosition] = useState<{ left: number; top: number } | null>(null);
-  const [editorPosition, setEditorPosition] = useState<{ left: number; top: number } | null>(null);
+  const [editorPlacement, setEditorPlacement] = useState<'start' | 'end'>('end');
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: bookmark.id,
     disabled: !dragEnabled,
@@ -296,35 +295,31 @@ function SortableBookmarkCard({
 
   useEffect(() => {
     if (!isEditorOpen) {
-      setEditorPosition(null);
       return;
     }
 
-    const updateEditorPosition = () => {
-      const rect = cardRef.current?.getBoundingClientRect();
+    const updateEditorPlacement = () => {
+      const cardRect = cardRef.current?.getBoundingClientRect();
+      const scrollRect = cardRef.current
+        ?.closest('.right-panel-scroll')
+        ?.getBoundingClientRect();
 
-      if (!rect) {
+      if (!cardRect || !scrollRect) {
+        setEditorPlacement('end');
         return;
       }
 
-      const desiredWidth = 320;
-      const viewportPadding = 16;
-      const left = Math.min(
-        window.innerWidth - desiredWidth - viewportPadding,
-        Math.max(viewportPadding, rect.right - desiredWidth)
-      );
-      const top = Math.min(window.innerHeight - 240, rect.bottom + 8);
+      const startOverflow = Math.max(0, cardRect.left + BOOKMARK_EDITOR_POPOVER_WIDTH - scrollRect.right);
+      const endOverflow = Math.max(0, scrollRect.left - (cardRect.right - BOOKMARK_EDITOR_POPOVER_WIDTH));
 
-      setEditorPosition({ left, top });
+      setEditorPlacement(startOverflow <= endOverflow ? 'start' : 'end');
     };
 
-    updateEditorPosition();
-    window.addEventListener('resize', updateEditorPosition);
-    window.addEventListener('scroll', updateEditorPosition, true);
+    updateEditorPlacement();
+    window.addEventListener('resize', updateEditorPlacement);
 
     return () => {
-      window.removeEventListener('resize', updateEditorPosition);
-      window.removeEventListener('scroll', updateEditorPosition, true);
+      window.removeEventListener('resize', updateEditorPlacement);
     };
   }, [isEditorOpen]);
 
@@ -358,19 +353,6 @@ function SortableBookmarkCard({
     event.preventDefault();
     event.stopPropagation();
 
-    const rect = event.currentTarget.getBoundingClientRect();
-    const menuWidth = 148;
-    const viewportPadding = 12;
-    const left = Math.min(
-      window.innerWidth - menuWidth - viewportPadding,
-      Math.max(viewportPadding, rect.right - menuWidth)
-    );
-    const top = Math.min(window.innerHeight - 120, rect.bottom + 8);
-
-    setActionMenuPosition({
-      left,
-      top
-    });
     setIsActionMenuOpen((current) => !current);
   };
 
@@ -425,56 +407,53 @@ function SortableBookmarkCard({
           <MoreHorizontal size={14} strokeWidth={1.8} />
         </button>
       </span>
-      {isActionMenuOpen && actionMenuPosition
-        ? createPortal(
-            <div
-              ref={actionMenuRef}
-              className="action-menu"
-              style={{ left: actionMenuPosition.left, top: actionMenuPosition.top }}
-              onMouseDown={(event) => event.stopPropagation()}
-              onWheelCapture={containOverlayScroll}
-            >
-              <button
-                type="button"
-                className="action-menu-item"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setIsActionMenuOpen(false);
-                  window.setTimeout(() => {
-                    onOpenEditor(bookmark);
-                  }, 0);
-                }}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                className="action-menu-item action-menu-item-danger"
-                onClick={() => {
-                  setIsActionMenuOpen(false);
-                  onDeleteBookmark(bookmark);
-                }}
-              >
-                Delete
-              </button>
-            </div>,
-            document.body
-          )
-        : null}
-      {isEditorOpen && editorPosition
-        ? createPortal(
+      {isActionMenuOpen ? (
+        <div
+          ref={actionMenuRef}
+          className="action-menu"
+          onMouseDown={(event) => event.stopPropagation()}
+          onWheelCapture={containOverlayScroll}
+        >
+          <button
+            type="button"
+            className="action-menu-item"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setIsActionMenuOpen(false);
+              window.setTimeout(() => {
+                onOpenEditor(bookmark);
+              }, 0);
+            }}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            className="action-menu-item action-menu-item-danger"
+            onClick={() => {
+              setIsActionMenuOpen(false);
+              onDeleteBookmark(bookmark);
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      ) : null}
+      {isEditorOpen ? (
             <div
               ref={editorRef}
-              className="bookmark-editor-popover"
-              style={{ left: editorPosition.left, top: editorPosition.top }}
+              className={`bookmark-editor-popover ${editorPlacement === 'start' ? 'align-start' : 'align-end'}`}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
-              onWheelCapture={containOverlayScroll}
+              onWheelCapture={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
             >
               <div className="bookmark-editor-header">
                 <div className="bookmark-editor-title">Edit</div>
@@ -543,10 +522,8 @@ function SortableBookmarkCard({
                   Cancel
                 </button>
               </div>
-            </div>,
-            document.body
-          )
-        : null}
+            </div>
+          ) : null}
     </div>
   );
 }

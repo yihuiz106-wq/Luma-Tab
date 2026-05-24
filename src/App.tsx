@@ -14,6 +14,7 @@ import {
   getBookmarkMetadata,
   getBookmarkPanelState,
   getDeepSeekApiKey,
+  getHiddenLeftPanelDomains,
   getLastUpdateTime,
   getPinnedPages,
   getRawTimeLog,
@@ -22,6 +23,7 @@ import {
   saveBookmarkMetadata,
   saveBookmarkPanelState,
   saveDeepSeekApiKey,
+  saveHiddenLeftPanelDomains,
   saveLastUpdateTime,
   savePinnedPages,
   saveRawTimeLog,
@@ -36,6 +38,7 @@ interface FullAiClassificationTrigger {
 
 export default function App() {
   const [deepseekApiKey, setDeepseekApiKey] = useState('');
+  const [hiddenLeftPanelDomains, setHiddenLeftPanelDomains] = useState<string[]>([]);
   const [allBookmarks, setAllBookmarks] = useState<BookmarkItem[]>([]);
   const [fullAiClassificationTrigger, setFullAiClassificationTrigger] = useState<FullAiClassificationTrigger>({
     nonce: 0,
@@ -60,13 +63,15 @@ export default function App() {
     let isMounted = true;
 
     async function loadAppState() {
-      const [storedApiKey, bookmarks] = await Promise.all([
+      const [storedApiKey, storedHiddenDomains, bookmarks] = await Promise.all([
         getDeepSeekApiKey(),
+        getHiddenLeftPanelDomains(),
         getAllBookmarks()
       ]);
 
       if (isMounted) {
         setDeepseekApiKey(storedApiKey);
+        setHiddenLeftPanelDomains(storedHiddenDomains);
         setAllBookmarks(bookmarks);
       }
     }
@@ -93,6 +98,12 @@ export default function App() {
           setDeepseekApiKey(nextApiKey);
         });
       }
+
+      if (changes.hiddenLeftPanelDomains) {
+        void getHiddenLeftPanelDomains().then((nextHiddenDomains) => {
+          setHiddenLeftPanelDomains(nextHiddenDomains);
+        });
+      }
     };
 
     chrome.storage.onChanged.addListener(handleStorageChange);
@@ -112,10 +123,17 @@ export default function App() {
     await clearDeepSeekApiKey();
   };
 
+  const handleUnhideLeftPanelDomain = async (domain: string) => {
+    const nextDomains = hiddenLeftPanelDomains.filter((item) => item !== domain);
+    setHiddenLeftPanelDomains(nextDomains);
+    await saveHiddenLeftPanelDomains(nextDomains);
+  };
+
   const handleExportData = async () => {
     const [
       bookmarkPanelState,
       pinnedPages,
+      hiddenLeftPanelDomains,
       urlNameCache,
       bookmarkMetadata,
       autoClassifyFailedIds,
@@ -124,6 +142,7 @@ export default function App() {
     ] = await Promise.all([
       getBookmarkPanelState(),
       getPinnedPages(),
+      getHiddenLeftPanelDomains(),
       getUrlNameCache(),
       getBookmarkMetadata(),
       getAutoClassifyFailedIds(),
@@ -137,6 +156,7 @@ export default function App() {
       uiSettings: defaultUiSettings,
       bookmarkPanelState,
       pinnedPages,
+      hiddenLeftPanelDomains,
       urlNameCache,
       bookmarkMetadata,
       autoClassifyFailedIds,
@@ -168,6 +188,9 @@ export default function App() {
       ...(parsed.bookmarkPanelState ?? defaultBookmarkPanelState)
     };
     const nextPinnedPages = Array.isArray(parsed.pinnedPages) ? parsed.pinnedPages : [];
+    const nextHiddenLeftPanelDomains = Array.isArray(parsed.hiddenLeftPanelDomains)
+      ? parsed.hiddenLeftPanelDomains.filter((item): item is string => typeof item === 'string')
+      : [];
     const nextUrlNameCache = parsed.urlNameCache ?? {};
     const nextBookmarkMetadata = parsed.bookmarkMetadata ?? {};
     const nextAutoClassifyFailedIds = Array.isArray(parsed.autoClassifyFailedIds)
@@ -180,6 +203,7 @@ export default function App() {
     await Promise.all([
       saveBookmarkPanelState(nextBookmarkPanelState),
       savePinnedPages(nextPinnedPages),
+      saveHiddenLeftPanelDomains(nextHiddenLeftPanelDomains),
       saveUrlNameCache(nextUrlNameCache),
       saveBookmarkMetadata(nextBookmarkMetadata),
       saveAutoClassifyFailedIds(nextAutoClassifyFailedIds),
@@ -189,6 +213,7 @@ export default function App() {
     ]);
 
     setDeepseekApiKey(nextApiKey);
+    setHiddenLeftPanelDomains(nextHiddenLeftPanelDomains);
     setAllBookmarks(await getAllBookmarks());
   };
 
@@ -231,8 +256,10 @@ export default function App() {
       <div className="page-background" />
       <SettingsPanel
         deepseekApiKey={deepseekApiKey}
+        hiddenLeftPanelDomains={hiddenLeftPanelDomains}
         onDeepSeekApiKeyChange={handleDeepSeekApiKeyChange}
         onClearDeepSeekApiKey={handleClearDeepSeekApiKey}
+        onUnhideLeftPanelDomain={handleUnhideLeftPanelDomain}
         onExportData={handleExportData}
         onImportData={handleImportData}
       />

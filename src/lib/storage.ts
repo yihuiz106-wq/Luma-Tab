@@ -19,6 +19,7 @@ const LAST_UPDATE_TIME_KEY = 'lastUpdateTime';
 const ACTIVE_TRACKED_SESSION_KEY = 'activeTrackedSession';
 const URL_NAME_CACHE_KEY = 'urlNameCache';
 const BOOKMARK_METADATA_KEY = 'bookmarkMetadata';
+const HIDDEN_LEFT_PANEL_DOMAINS_KEY = 'hiddenLeftPanelDomains';
 
 export const defaultUiSettings: UiSettings = {
   opacity: 0.9,
@@ -36,6 +37,7 @@ export const defaultBookmarkPanelState: BookmarkPanelState = {
 
 export const defaultPinnedPages: PinnedPage[] = [];
 export const defaultRawTimeLog: TimeLogEntry[] = [];
+export const defaultHiddenLeftPanelDomains: string[] = [];
 export const defaultUrlNameCache: Record<string, string> = {};
 export const defaultBookmarkMetadata: BookmarkMetadataMap = {};
 export const defaultAutoClassifyFailedIds: string[] = [];
@@ -154,6 +156,42 @@ export async function savePinnedPages(pinnedPages: PinnedPage[]): Promise<void> 
   }
 
   window.localStorage.setItem(PINNED_PAGES_KEY, JSON.stringify(pinnedPages));
+}
+
+export async function getHiddenLeftPanelDomains(): Promise<string[]> {
+  if (isChromeStorageAvailable()) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(HIDDEN_LEFT_PANEL_DOMAINS_KEY, (items) => {
+        const storedValue = items[HIDDEN_LEFT_PANEL_DOMAINS_KEY];
+        resolve(Array.isArray(storedValue) ? storedValue.filter((item): item is string => typeof item === 'string') : defaultHiddenLeftPanelDomains);
+      });
+    });
+  }
+
+  const rawValue = window.localStorage.getItem(HIDDEN_LEFT_PANEL_DOMAINS_KEY);
+
+  if (!rawValue) {
+    return defaultHiddenLeftPanelDomains;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : defaultHiddenLeftPanelDomains;
+  } catch {
+    return defaultHiddenLeftPanelDomains;
+  }
+}
+
+export async function saveHiddenLeftPanelDomains(domains: string[]): Promise<void> {
+  const normalizedDomains = [...new Set(domains.map((domain) => domain.trim()).filter(Boolean))].sort();
+
+  if (isChromeStorageAvailable()) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [HIDDEN_LEFT_PANEL_DOMAINS_KEY]: normalizedDomains }, () => resolve());
+    });
+  }
+
+  window.localStorage.setItem(HIDDEN_LEFT_PANEL_DOMAINS_KEY, JSON.stringify(normalizedDomains));
 }
 
 export async function getUrlNameCache(): Promise<Record<string, string>> {

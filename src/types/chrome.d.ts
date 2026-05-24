@@ -62,11 +62,20 @@ declare namespace chrome {
   }
 
   namespace windows {
+    interface Window {
+      id?: number;
+      focused?: boolean;
+    }
+
     const WINDOW_ID_NONE: number;
 
     const onFocusChanged: {
       addListener(callback: (windowId: number) => void): void;
     };
+
+    function getLastFocused(
+      callback: (window: Window) => void
+    ): void;
   }
 
   namespace storage {
