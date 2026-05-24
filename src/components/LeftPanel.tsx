@@ -25,6 +25,11 @@ interface FrequentSite {
   url: string;
 }
 
+interface ContinueListItem extends FrequentSite {
+  isPinned: boolean;
+  pinnedPage?: PinnedPage;
+}
+
 const MIN_CONTINUE_DURATION = 3 * 60 * 1000;
 const CONTINUE_SCORE_DURATION_CAP = 3 * 60 * 60 * 1000;
 const CONTINUE_RECENCY_WEIGHT = 0.75;
@@ -54,6 +59,32 @@ function getUrlDomain(url: string) {
   }
 }
 
+function getPinnedPageId(url: string) {
+  let hash = 0;
+
+  for (let index = 0; index < url.length; index += 1) {
+    hash = (hash * 31 + url.charCodeAt(index)) >>> 0;
+  }
+
+  return `pinned-${hash.toString(36)}`;
+}
+
+function dedupePinnedPagesByUrl(pinnedPages: PinnedPage[]) {
+  const seenUrls = new Set<string>();
+  const dedupedPages: PinnedPage[] = [];
+
+  for (const item of pinnedPages) {
+    if (!item.url || seenUrls.has(item.url)) {
+      continue;
+    }
+
+    seenUrls.add(item.url);
+    dedupedPages.push(item);
+  }
+
+  return dedupedPages;
+}
+
 function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
   const grouped = new Map<string, FrequentSite>();
   const now = Date.now();
@@ -61,21 +92,22 @@ function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
 
   for (const entry of entries) {
     const domain = getEntryDomain(entry);
+    const url = entry.url.trim();
 
-    if (!domain) {
+    if (!domain || !url) {
       continue;
     }
 
-    const existing = grouped.get(domain);
+    const existing = grouped.get(url);
 
     if (!existing) {
-      grouped.set(domain, {
+      grouped.set(url, {
         domain,
         title: entry.title,
         duration: entry.duration,
         totalDuration: entry.duration,
         lastUsedAt: entry.date,
-        url: entry.url
+        url
       });
       continue;
     }
@@ -85,7 +117,8 @@ function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
     if (entry.date > existing.lastUsedAt) {
       existing.lastUsedAt = entry.date;
       existing.title = entry.title;
-      existing.url = entry.url;
+      existing.url = url;
+      existing.domain = domain;
       existing.duration = entry.duration;
     }
   }
@@ -120,7 +153,7 @@ function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
 function syncPinnedPagesWithBookmarks(pinnedPages: PinnedPage[], bookmarks: Array<{ id: string; title: string; url: string; sourcePath: string }>) {
   const bookmarksById = new Map(bookmarks.map((bookmark) => [bookmark.id, bookmark]));
 
-  return pinnedPages.map((item) => {
+  return dedupePinnedPagesByUrl(pinnedPages.map((item) => {
     const bookmark = bookmarksById.get(item.id);
 
     if (!bookmark) {
@@ -133,10 +166,54 @@ function syncPinnedPagesWithBookmarks(pinnedPages: PinnedPage[], bookmarks: Arra
       url: bookmark.url,
       sourcePath: bookmark.sourcePath
     };
-  });
+  }));
+}
+
+function isNthWeekdayOfMonth(date: Date, month: number, weekday: number, nth: number) {
+  if (date.getMonth() !== month || date.getDay() !== weekday) {
+    return false;
+  }
+
+  return Math.floor((date.getDate() - 1) / 7) + 1 === nth;
+}
+
+function getCalendarGreeting(date: Date) {
+  const month = date.getMonth();
+  const day = date.getDate();
+  const fixedGreetingByDate: Record<string, string> = {
+    '0-1': 'Happy New Year',
+    '1-14': 'Happy Valentine’s Day',
+    '2-14': 'Happy Pi Day',
+    '3-22': 'Happy Earth Day',
+    '4-4': 'May the Fourth be with you',
+    '9-31': 'Happy Halloween',
+    '11-24': 'Happy Christmas Eve',
+    '11-25': 'Merry Christmas',
+    '11-31': 'Happy New Year’s Eve'
+  };
+  const fixedGreeting = fixedGreetingByDate[`${month}-${day}`];
+
+  if (fixedGreeting) {
+    return fixedGreeting;
+  }
+
+  if (isNthWeekdayOfMonth(date, 10, 4, 4)) {
+    return 'Happy Thanksgiving';
+  }
+
+  if (isNthWeekdayOfMonth(date, 4, 0, 2)) {
+    return 'Happy Mother’s Day';
+  }
+
+  if (isNthWeekdayOfMonth(date, 5, 0, 3)) {
+    return 'Happy Father’s Day';
+  }
+
+  return null;
 }
 
 export default function LeftPanel() {
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   const [pinnedPages, setPinnedPages] = useState<PinnedPage[]>([]);
   const [continuePages, setContinuePages] = useState<FrequentSite[]>([]);
   const [hiddenDomains, setHiddenDomains] = useState<string[]>([]);
@@ -153,6 +230,16 @@ export default function LeftPanel() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const isRefreshingContinueNamesRef = useRef(false);
   const pendingContinuePagesRef = useRef<FrequentSite[] | null>(null);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60 * 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const refreshContinuePageNames = async (
     nextContinuePages: FrequentSite[],
@@ -227,16 +314,21 @@ export default function LeftPanel() {
       ]);
       const nextContinuePages = buildContinuePages(rawTimeLog);
       const nextBookmarkTitleByUrl = Object.fromEntries(bookmarks.map((bookmark) => [bookmark.url, bookmark.title]));
+      const nextPinnedPages = syncPinnedPagesWithBookmarks(storedPinnedPages, bookmarks);
 
       if (!isMounted) {
         return;
       }
 
-      setPinnedPages(syncPinnedPagesWithBookmarks(storedPinnedPages, bookmarks));
+      setPinnedPages(nextPinnedPages);
       setContinuePages(nextContinuePages);
       setHiddenDomains(storedHiddenDomains.map(normalizeDomain).filter(Boolean));
       setUrlNameCache(storedUrlNameCache);
       setBookmarkTitleByUrl(nextBookmarkTitleByUrl);
+
+      if (nextPinnedPages.length !== storedPinnedPages.length) {
+        void savePinnedPages(nextPinnedPages);
+      }
 
       void refreshContinuePageNames(nextContinuePages, storedUrlNameCache, deepseekApiKey);
     }
@@ -336,7 +428,7 @@ export default function LeftPanel() {
       }
 
       if ('pinnedPages' in changes && Array.isArray(changes.pinnedPages?.newValue)) {
-        setPinnedPages(changes.pinnedPages.newValue as PinnedPage[]);
+        setPinnedPages(dedupePinnedPagesByUrl(changes.pinnedPages.newValue as PinnedPage[]));
       }
 
       if ('hiddenLeftPanelDomains' in changes && Array.isArray(changes.hiddenLeftPanelDomains?.newValue)) {
@@ -382,27 +474,25 @@ export default function LeftPanel() {
     await saveHiddenLeftPanelDomains(nextHiddenDomains);
   };
 
-  const handleUnpin = async (bookmarkId: string) => {
-    const nextPinnedPages = pinnedPages.filter((item) => item.id !== bookmarkId);
-    setPinnedPages(nextPinnedPages);
-    await savePinnedPages(nextPinnedPages);
-  };
-
-  const handlePinContinuePage = async (site: FrequentSite) => {
+  const handleTogglePinnedPage = async (site: FrequentSite) => {
     if (pinnedPages.some((item) => item.url === site.url)) {
+      const nextPinnedPages = pinnedPages.filter((item) => item.url !== site.url);
+
+      setPinnedPages(nextPinnedPages);
+      await savePinnedPages(nextPinnedPages);
       return;
     }
 
-    const nextPinnedPages: PinnedPage[] = [
+    const nextPinnedPages = dedupePinnedPagesByUrl([
       {
-        id: `pinned-${site.domain}`,
+        id: getPinnedPageId(site.url),
         title: site.title,
         url: site.url,
         sourcePath: site.domain,
         customName: urlNameCache[site.url]
       },
       ...pinnedPages
-    ];
+    ]);
 
     setPinnedPages(nextPinnedPages);
     await savePinnedPages(nextPinnedPages);
@@ -484,7 +574,7 @@ export default function LeftPanel() {
 
   const deleteContinuePage = async (site: FrequentSite) => {
     const rawTimeLog = await getRawTimeLog();
-    const nextRawTimeLog = rawTimeLog.filter((entry) => getEntryDomain(entry) !== site.domain);
+    const nextRawTimeLog = rawTimeLog.filter((entry) => entry.url.trim() !== site.url);
     const nextContinuePages = buildContinuePages(nextRawTimeLog);
 
     setContinuePages(nextContinuePages);
@@ -522,108 +612,77 @@ export default function LeftPanel() {
     return site.title;
   };
 
+  const getContinueListDisplayName = (item: ContinueListItem) => {
+    if (item.pinnedPage) {
+      return getPinnedDisplayName(item.pinnedPage.title, item.pinnedPage.url, item.pinnedPage.customName);
+    }
+
+    return getContinueDisplayName(item);
+  };
+
+  const getGreeting = () => {
+    const calendarGreeting = getCalendarGreeting(currentDate);
+
+    if (calendarGreeting) {
+      return calendarGreeting;
+    }
+
+    const hour = currentDate.getHours();
+
+    if (hour < 6) {
+      return 'Have a good night';
+    }
+
+    if (hour < 12) {
+      return 'Good morning';
+    }
+
+    if (hour < 18) {
+      return 'Good afternoon';
+    }
+
+    return 'Good evening';
+  };
+
   const hiddenDomainSet = new Set(hiddenDomains);
-  const visiblePinnedPages = pinnedPages.filter((item) => !hiddenDomainSet.has(getUrlDomain(item.url)));
-  const visibleContinuePages = continuePages.filter((site) => !hiddenDomainSet.has(normalizeDomain(site.domain)));
+  const visiblePinnedPages = dedupePinnedPagesByUrl(pinnedPages).filter((item) => !hiddenDomainSet.has(getUrlDomain(item.url)));
+  const pinnedUrlSet = new Set(visiblePinnedPages.map((item) => item.url));
+  const pinnedContinueItems: ContinueListItem[] = visiblePinnedPages.map((item) => ({
+    domain: getUrlDomain(item.url) || item.sourcePath || '',
+    title: item.title,
+    duration: 0,
+    totalDuration: 0,
+    lastUsedAt: Number.MAX_SAFE_INTEGER,
+    url: item.url,
+    isPinned: true,
+    pinnedPage: item
+  }));
+  const visibleContinuePages: ContinueListItem[] = continuePages
+    .filter((site) => !hiddenDomainSet.has(normalizeDomain(site.domain)) && !pinnedUrlSet.has(site.url))
+    .map((site) => ({
+      ...site,
+      isPinned: false
+    }));
+  const visibleContinueItems = [...pinnedContinueItems, ...visibleContinuePages];
+  const timeText = currentDate.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  const dateText = currentDate.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  });
 
   return (
     <div className="left-panel">
-      <div className="left-panel-block">
-        <div className="left-panel-heading">
-          <div className="left-panel-title">Common Entrances</div>
-        </div>
-        <div className="left-panel-list">
-          {visiblePinnedPages.length > 0 ? (
-            visiblePinnedPages.map((item) => (
-              <div
-                key={item.id}
-                className="item-card left-item-card"
-              >
-                {editingItem?.kind === 'pinned' && editingItem.id === item.id ? (
-                  <span className="left-item-main">
-                    <input
-                      ref={inputRef}
-                      className="left-item-input"
-                      value={draftName}
-                      onChange={(event) => setDraftName(event.target.value)}
-                      onBlur={() => void savePinnedCustomName(item.id, draftName)}
-                      onKeyDown={(event) => handleEditKeyDown(event, () => savePinnedCustomName(item.id, draftName))}
-                    />
-                    <span className="left-item-meta">{item.sourcePath ?? item.url}</span>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="bookmark-section-toggle left-item-open"
-                    onClick={() => openBookmark(item.url)}
-                  >
-                    <span className="left-item-main">
-                      <span
-                        className="left-item-title"
-                      >
-                        {getPinnedDisplayName(item.title, item.url, item.customName)}
-                      </span>
-                      <span className="left-item-meta">{item.sourcePath ?? item.url}</span>
-                    </span>
-                  </button>
-                )}
-                <span className="left-item-actions">
-                  <button
-                    ref={menuState?.kind === 'pinned' && menuState.id === item.id ? menuButtonRef : null}
-                    type="button"
-                    className={`bookmark-icon-button hover-action-button${menuState?.kind === 'pinned' && menuState.id === item.id ? ' active' : ''}`}
-                    aria-label="Open pinned page actions"
-                    title="More actions"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => openActionMenu(event, 'pinned', item.id)}
-                  >
-                    <MoreHorizontal size={14} strokeWidth={1.8} />
-                  </button>
-                  <button
-                    type="button"
-                    className="bookmark-icon-button pin-icon-button"
-                    aria-label="Unpin site"
-                    title="Unpin"
-                    onClick={() => void handleUnpin(item.id)}
-                  >
-                    <PinOff size={14} strokeWidth={1.8} />
-                  </button>
-                </span>
-                {menuState?.kind === 'pinned' && menuState.id === item.id ? (
-                  <div
-                    ref={menuRef}
-                    className="action-menu"
-                    onMouseDown={(event) => event.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      className="action-menu-item"
-                      onClick={() => {
-                        startEditing('pinned', item.id, getPinnedDisplayName(item.title, item.url, item.customName));
-                        setMenuState(null);
-                      }}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      type="button"
-                      className="action-menu-item"
-                      onClick={() => {
-                        void hideLeftPanelDomain(getUrlDomain(item.url));
-                      }}
-                    >
-                      Hide Domain
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ))
-          ) : (
-            <div className="left-placeholder">No pinned pages.</div>
-          )}
+      <div className="left-panel-block left-time-block">
+        <div className="left-time-card">
+          <div className="left-time-copy">
+            <div className="left-time-label">{getGreeting()}</div>
+            <div className="left-time-date">{dateText}</div>
+          </div>
+          <div className="left-time-value">{timeText}</div>
         </div>
       </div>
 
@@ -632,24 +691,28 @@ export default function LeftPanel() {
           <div className="left-panel-title">Continue Browsing</div>
         </div>
         <div className="left-panel-list">
-          {visibleContinuePages.length > 0 ? (
-            visibleContinuePages.map((site) => (
+          {visibleContinueItems.length > 0 ? (
+            visibleContinueItems.map((site) => (
               <div
-                key={site.url}
+                key={`${site.isPinned ? 'pinned' : 'continue'}-${site.url}`}
                 className="item-card left-item-card"
               >
-                {editingItem?.kind === 'continue' && editingItem.id === site.url ? (
+                {editingItem?.kind === (site.isPinned ? 'pinned' : 'continue') && editingItem.id === (site.pinnedPage?.id ?? site.url) ? (
                   <span className="left-item-main">
                     <input
                       ref={inputRef}
                       className="left-item-input"
                       value={draftName}
                       onChange={(event) => setDraftName(event.target.value)}
-                      onBlur={() => void saveContinueCustomName(site, draftName)}
-                      onKeyDown={(event) => handleEditKeyDown(event, () => saveContinueCustomName(site, draftName))}
+                      onBlur={() => void (site.pinnedPage ? savePinnedCustomName(site.pinnedPage.id, draftName) : saveContinueCustomName(site, draftName))}
+                      onKeyDown={(event) =>
+                        handleEditKeyDown(event, () =>
+                          site.pinnedPage ? savePinnedCustomName(site.pinnedPage.id, draftName) : saveContinueCustomName(site, draftName)
+                        )
+                      }
                     />
                     <span className="left-item-meta">
-                      {site.domain}
+                      {site.pinnedPage?.sourcePath ?? site.domain}
                     </span>
                   </span>
                 ) : (
@@ -664,46 +727,39 @@ export default function LeftPanel() {
                         <span
                           className="left-item-title left-item-title-multiline"
                         >
-                          {getContinueDisplayName(site)}
+                          {getContinueListDisplayName(site)}
                         </span>
-                        <span className="left-item-meta">{site.domain}</span>
+                        <span className="left-item-meta">{site.pinnedPage?.sourcePath ?? site.domain}</span>
                       </span>
                     </span>
                   </button>
                 )}
                 <span className="left-item-actions">
                   <button
-                    ref={menuState?.kind === 'continue' && menuState.id === site.url ? menuButtonRef : null}
+                    ref={menuState?.kind === (site.isPinned ? 'pinned' : 'continue') && menuState.id === (site.pinnedPage?.id ?? site.url) ? menuButtonRef : null}
                     type="button"
-                    className={`bookmark-icon-button hover-action-button${menuState?.kind === 'continue' && menuState.id === site.url ? ' active' : ''}`}
+                    className={`bookmark-icon-button hover-action-button${menuState?.kind === (site.isPinned ? 'pinned' : 'continue') && menuState.id === (site.pinnedPage?.id ?? site.url) ? ' active' : ''}`}
                     aria-label="Open continue page actions"
                     title="More actions"
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                     }}
-                    onClick={(event) => openActionMenu(event, 'continue', site.url)}
+                    onClick={(event) => openActionMenu(event, site.isPinned ? 'pinned' : 'continue', site.pinnedPage?.id ?? site.url)}
                   >
                     <MoreHorizontal size={14} strokeWidth={1.8} />
                   </button>
-                  {(() => {
-                    const isPinned = pinnedPages.some((item) => item.url === site.url);
-
-                    return (
-                      <button
-                        type="button"
-                        className={`bookmark-icon-button pin-icon-button${isPinned ? ' active' : ''}`}
-                        aria-label={isPinned ? 'Already pinned' : 'Pin site'}
-                        title={isPinned ? 'Pinned' : 'Pin'}
-                        onClick={() => void handlePinContinuePage(site)}
-                        disabled={isPinned}
-                      >
-                        <Pin size={14} strokeWidth={1.8} />
-                      </button>
-                    );
-                  })()}
+                  <button
+                    type="button"
+                    className={`bookmark-icon-button pin-icon-button${site.isPinned ? ' active' : ''}`}
+                    aria-label={site.isPinned ? 'Unpin page' : 'Pin page'}
+                    title={site.isPinned ? 'Unpin' : 'Pin'}
+                    onClick={() => void handleTogglePinnedPage(site)}
+                  >
+                    {site.isPinned ? <PinOff size={14} strokeWidth={1.8} /> : <Pin size={14} strokeWidth={1.8} />}
+                  </button>
                 </span>
-                {menuState?.kind === 'continue' && menuState.id === site.url ? (
+                {menuState?.kind === (site.isPinned ? 'pinned' : 'continue') && menuState.id === (site.pinnedPage?.id ?? site.url) ? (
                   <div
                     ref={menuRef}
                     className="action-menu"
@@ -713,7 +769,7 @@ export default function LeftPanel() {
                       type="button"
                       className="action-menu-item"
                       onClick={() => {
-                        startEditing('continue', site.url, getContinueDisplayName(site));
+                        startEditing(site.isPinned ? 'pinned' : 'continue', site.pinnedPage?.id ?? site.url, getContinueListDisplayName(site));
                         setMenuState(null);
                       }}
                     >
@@ -723,21 +779,23 @@ export default function LeftPanel() {
                       type="button"
                       className="action-menu-item"
                       onClick={() => {
-                        void hideLeftPanelDomain(site.domain);
+                        void hideLeftPanelDomain(getUrlDomain(site.url) || site.domain);
                       }}
                     >
                       Hide Domain
                     </button>
-                    <button
-                      type="button"
-                      className="action-menu-item action-menu-item-danger"
-                      onClick={() => {
-                        void deleteContinuePage(site);
-                        setMenuState(null);
-                      }}
-                    >
-                      Delete
-                    </button>
+                    {!site.isPinned ? (
+                      <button
+                        type="button"
+                        className="action-menu-item action-menu-item-danger"
+                        onClick={() => {
+                          void deleteContinuePage(site);
+                          setMenuState(null);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

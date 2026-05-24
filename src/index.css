@@ -142,6 +142,83 @@ body {
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.bookmark-section-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.bookmark-category-sorter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 16px rgba(15, 23, 42, 0.012);
+}
+
+.bookmark-category-sorter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.bookmark-category-sort-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.bookmark-category-sort-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 4px 14px rgba(15, 23, 42, 0.018);
+}
+
+.bookmark-category-sort-row.dragging {
+  opacity: 0.92;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 8px 20px rgba(15, 23, 42, 0.05);
+}
+
+.bookmark-category-sort-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bookmark-category-sort-main .bookmark-section-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bookmark-section + .bookmark-section {
   margin-top: 14px;
 }
@@ -151,9 +228,14 @@ body {
   border-color: rgba(255, 255, 255, 0.44);
 }
 
+.bookmark-section.drop-target-active {
+  border-color: var(--accent-border-strong);
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .bookmark-section.dragging {
-  opacity: 0.72;
-  box-shadow: 0 0 28px rgba(15, 23, 42, 0.08);
+  opacity: 0.9;
+  box-shadow: 0 0 22px rgba(15, 23, 42, 0.052);
 }
 
 .bookmark-section.collapsed {
@@ -208,6 +290,10 @@ body {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.bookmark-section-header.drop-target-active {
+  color: var(--accent-text);
 }
 
 .bookmark-section-toggle {
@@ -574,6 +660,62 @@ body {
   gap: 12px;
 }
 
+.left-time-block {
+  flex: 0 0 auto;
+}
+
+.left-time-card {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 24px;
+  min-height: 96px;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.5), transparent 34%),
+    rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(213, 203, 189, 0.08),
+    0 10px 26px rgba(15, 23, 42, 0.026);
+}
+
+.left-time-copy {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 46%;
+  gap: 8px;
+  min-width: 0;
+}
+
+.left-time-label {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.left-time-value {
+  flex: 1 1 54%;
+  color: rgba(31, 41, 55, 0.68);
+  font-family: 'Times New Roman', Times, Georgia, serif;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  font-size: 36px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.left-time-date {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .left-panel-heading {
   display: flex;
   align-items: center;
@@ -717,7 +859,11 @@ body {
 }
 
 .bookmark-card.dragging {
-  opacity: 0.7;
+  opacity: 0.92;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    inset 0 -1px 0 rgba(213, 203, 189, 0.08),
+    0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
 .bookmark-card-actions {

@@ -2,9 +2,11 @@ import {
   DndContext,
   type DragEndEvent,
   type DragOverEvent,
-  type DragStartEvent,
   PointerSensor,
+  type CollisionDetection,
   closestCenter,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
   useSensor,
   useSensors
@@ -13,10 +15,9 @@ import {
   SortableContext,
   arrayMove,
   rectSortingStrategy,
-  useSortable,
-  verticalListSortingStrategy
+  useSortable
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { CSS, type Transform } from '@dnd-kit/utilities';
 import { GripVertical, MoreHorizontal, PencilLine, Trash2, X } from 'lucide-react';
 import { type WheelEvent as ReactWheelEvent, useEffect, useMemo, useRef, useState } from 'react';
 import FaviconImage from './FaviconImage';
@@ -44,6 +45,27 @@ import type {
 const UNCLASSIFIED_CATEGORY_ID = 'unclassified';
 const UNCLASSIFIED_CATEGORY_TITLE = 'Unclassified';
 const BOOKMARK_EDITOR_POPOVER_WIDTH = 248;
+const DRAG_ACTIVATION_DISTANCE = 14;
+const SORTABLE_TRANSITION = {
+  duration: 280,
+  easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
+};
+
+const stableCollisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+
+  if (pointerCollisions.length > 0) {
+    return pointerCollisions;
+  }
+
+  const intersectingCollisions = rectIntersection(args);
+
+  return intersectingCollisions.length > 0 ? intersectingCollisions : closestCenter(args);
+};
+
+function toStableSortableTransform(transform: Transform | null) {
+  return CSS.Translate.toString(transform);
+}
 
 interface SortableCategorySectionProps {
   category: BookmarkCategory;
@@ -93,6 +115,20 @@ interface SortableBookmarkCardProps {
   onCloseEditor: () => void;
   onDiscardEditor: () => void;
   onDeleteBookmark: (bookmark: BookmarkItem) => void;
+}
+
+interface SortableCategoryRowProps {
+  category: BookmarkCategory;
+  isEditing: boolean;
+  editingTitle: string;
+  isAiGeneratedCategory: boolean;
+  showAiReviewActions: boolean;
+  onStartEdit: (category: BookmarkCategory) => void;
+  onChangeEditingTitle: (value: string) => void;
+  onCommitEdit: () => void;
+  onDeleteCategory: (categoryId: string) => void;
+  onAcceptAiCategory: (categoryId: string) => void;
+  onRejectAiCategory: (categoryId: string) => void;
 }
 
 interface RightPanelProps {
@@ -232,9 +268,10 @@ function SortableBookmarkCard({
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [editorPlacement, setEditorPlacement] = useState<'start' | 'end'>('end');
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: bookmark.id,
     disabled: !dragEnabled,
+    transition: SORTABLE_TRANSITION,
     data: {
       type: 'bookmark',
       categoryId
@@ -363,10 +400,11 @@ function SortableBookmarkCard({
         cardRef.current = node;
       }}
       className={`item-card bookmark-card${dragEnabled ? ' drag-enabled' : ''}${isDragging ? ' dragging' : ''}`}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: toStableSortableTransform(transform), transition }}
     >
       {dragEnabled ? (
         <button
+          ref={setActivatorNodeRef}
           type="button"
           className="bookmark-drag-handle"
           aria-label={`Drag bookmark ${displayTitle}`}
@@ -528,6 +566,112 @@ function SortableBookmarkCard({
   );
 }
 
+function SortableCategoryRow({
+  category,
+  isEditing,
+  editingTitle,
+  isAiGeneratedCategory,
+  showAiReviewActions,
+  onStartEdit,
+  onChangeEditingTitle,
+  onCommitEdit,
+  onDeleteCategory,
+  onAcceptAiCategory,
+  onRejectAiCategory
+}: SortableCategoryRowProps) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: category.id,
+    disabled: category.isSystem,
+    transition: SORTABLE_TRANSITION,
+    data: {
+      type: 'category',
+      categoryId: category.id
+    }
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`bookmark-category-sort-row${isDragging ? ' dragging' : ''}`}
+      style={{ transform: toStableSortableTransform(transform), transition }}
+    >
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        className="bookmark-drag-handle category-drag-handle"
+        aria-label={`Drag category ${category.title}`}
+        title="Drag category"
+        onClick={(event) => event.preventDefault()}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={14} strokeWidth={1.8} />
+      </button>
+      <div className="bookmark-category-sort-main">
+        {isEditing ? (
+          <input
+            className="bookmark-category-input"
+            type="text"
+            value={editingTitle}
+            autoFocus
+            onClick={(event) => event.stopPropagation()}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => onChangeEditingTitle(event.target.value)}
+            onBlur={onCommitEdit}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                onCommitEdit();
+              }
+            }}
+          />
+        ) : (
+          <span className="bookmark-section-name">{category.title}</span>
+        )}
+        {isAiGeneratedCategory ? <span className="bookmark-ai-badge">AI Category</span> : null}
+        <span className="bookmark-section-meta">{category.bookmarks.length} items</span>
+      </div>
+      <span className="bookmark-section-actions">
+        {showAiReviewActions ? (
+          <>
+            <button
+              type="button"
+              className="bookmark-icon-button bookmark-review-button"
+              onClick={() => onAcceptAiCategory(category.id)}
+            >
+              Accept AI Changes
+            </button>
+            <button
+              type="button"
+              className="bookmark-icon-button bookmark-review-button"
+              onClick={() => onRejectAiCategory(category.id)}
+            >
+              Revert AI Changes
+            </button>
+          </>
+        ) : null}
+        <button
+          type="button"
+          className="bookmark-icon-button"
+          aria-label="Rename category"
+          title="Rename"
+          onClick={() => onStartEdit(category)}
+        >
+          <PencilLine size={14} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="bookmark-icon-button"
+          aria-label="Delete category"
+          title="Delete"
+          onClick={() => onDeleteCategory(category.id)}
+        >
+          <Trash2 size={14} strokeWidth={1.8} />
+        </button>
+      </span>
+    </div>
+  );
+}
+
 function SortableCategorySection({
   category,
   isExpanded,
@@ -558,6 +702,15 @@ function SortableCategorySection({
   onDiscardBookmarkEditor,
   onDeleteBookmark
 }: SortableCategorySectionProps) {
+  const showInlineEditor = isEditing && !isDraftMode;
+  const { setNodeRef: setHeaderDropTargetRef, isOver: isHeaderDropTargetOver } = useDroppable({
+    id: `category-target-${category.id}`,
+    disabled: !dragEnabled,
+    data: {
+      type: 'category-target',
+      categoryId: category.id
+    }
+  });
   const { setNodeRef: setDropZoneRef, isOver: isDropZoneOver } = useDroppable({
     id: `dropzone-${category.id}`,
     disabled: !dragEnabled,
@@ -566,49 +719,30 @@ function SortableCategorySection({
       categoryId: category.id
     }
   });
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: category.id,
-    disabled: !dragEnabled || category.isSystem,
-    data: {
-      type: 'category',
-      categoryId: category.id
-    }
-  });
 
   return (
     <section
-      ref={setNodeRef}
-      className={`bookmark-section${isDragging ? ' dragging' : ''}${isExpanded ? '' : ' collapsed'}`}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`bookmark-section${isExpanded ? '' : ' collapsed'}${isHeaderDropTargetOver ? ' drop-target-active' : ''}`}
     >
-      <div className={`bookmark-section-header${dragEnabled && !category.isSystem ? ' drag-enabled' : ''}`}>
+      <div
+        ref={setHeaderDropTargetRef}
+        className={`bookmark-section-header${isHeaderDropTargetOver ? ' drop-target-active' : ''}`}
+      >
         <span className="bookmark-section-title">
           <span className="bookmark-section-title-row">
-            {dragEnabled && !category.isSystem ? (
-              <button
-                type="button"
-                className="bookmark-drag-handle category-drag-handle"
-                aria-label={`Drag category ${category.title}`}
-                title="Drag category"
-                onClick={(event) => event.preventDefault()}
-                {...attributes}
-                {...listeners}
-              >
-                <GripVertical size={14} strokeWidth={1.8} />
-              </button>
-            ) : null}
             <button
               type="button"
               className="bookmark-section-toggle"
               onClick={() => onToggle(category.id)}
             >
-              {isEditing ? (
+              {showInlineEditor ? (
                 <input
                   className="bookmark-category-input"
                   type="text"
                   value={editingTitle}
                   autoFocus
                   onClick={(event) => event.stopPropagation()}
+                  onFocus={(event) => event.currentTarget.select()}
                   onChange={(event) => onChangeEditingTitle(event.target.value)}
                   onBlur={onCommitEdit}
                   onKeyDown={(event) => {
@@ -680,29 +814,29 @@ function SortableCategorySection({
         <SortableContext items={category.bookmarks.map((bookmark) => bookmark.id)} strategy={rectSortingStrategy}>
           <div
             ref={setDropZoneRef}
-            className={`bookmark-grid${isDropZoneOver ? ' dropzone-active' : ''}${category.bookmarks.length === 0 ? ' empty' : ''}`}
+            className={`bookmark-grid${isDropZoneOver || isHeaderDropTargetOver ? ' dropzone-active' : ''}${category.bookmarks.length === 0 ? ' empty' : ''}`}
           >
             {category.bookmarks.map((bookmark) => {
               return (
-                <SortableBookmarkCard
-                  key={bookmark.id}
-                  bookmark={bookmark}
-                  categoryId={category.id}
-                  dragEnabled={dragEnabled}
-                  onOpen={onOpenBookmark}
-                  isAiSuggested={aiSuggestedBookmarkIds.has(bookmark.id)}
-                  isAutoClassifyFailed={category.isSystem === true && autoClassifyFailedIds.has(bookmark.id)}
-                  displayTitle={getDisplayTitle(bookmark)}
-                  description={getBookmarkDescription(bookmark.id)}
-                  isEditorOpen={editorBookmarkId === bookmark.id}
-                  editorState={editorState}
-                  onOpenEditor={onOpenBookmarkEditor}
-                  onChangeEditor={onChangeBookmarkEditor}
-                  onSaveEditor={onSaveBookmarkEditor}
-                  onCloseEditor={onCloseBookmarkEditor}
-                  onDiscardEditor={onDiscardBookmarkEditor}
-                  onDeleteBookmark={onDeleteBookmark}
-                />
+              <SortableBookmarkCard
+                key={bookmark.id}
+                bookmark={bookmark}
+                categoryId={category.id}
+                dragEnabled={dragEnabled}
+                onOpen={onOpenBookmark}
+                isAiSuggested={aiSuggestedBookmarkIds.has(bookmark.id)}
+                isAutoClassifyFailed={category.isSystem === true && autoClassifyFailedIds.has(bookmark.id)}
+                displayTitle={getDisplayTitle(bookmark)}
+                description={getBookmarkDescription(bookmark.id)}
+                isEditorOpen={editorBookmarkId === bookmark.id}
+                editorState={editorState}
+                onOpenEditor={onOpenBookmarkEditor}
+                onChangeEditor={onChangeBookmarkEditor}
+                onSaveEditor={onSaveBookmarkEditor}
+                onCloseEditor={onCloseBookmarkEditor}
+                onDiscardEditor={onDiscardBookmarkEditor}
+                onDeleteBookmark={onDeleteBookmark}
+              />
               );
             })}
             {category.bookmarks.length === 0 ? (
@@ -726,7 +860,6 @@ export default function RightPanel({
   const [draftVirtualCategories, setDraftVirtualCategories] = useState<VirtualBookmarkCategory[] | null>(null);
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<Record<string, boolean>>({});
   const [filterQuery, setFilterQuery] = useState('');
-  const [activeDragType, setActiveDragType] = useState<'category' | 'bookmark' | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [autoNoticeMessage, setAutoNoticeMessage] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -742,7 +875,9 @@ export default function RightPanel({
   const [editorBookmarkId, setEditorBookmarkId] = useState<string | null>(null);
   const [editorState, setEditorState] = useState({ title: '', url: '', description: '' });
   const lastProcessedOrganizeCommandNonce = useRef(0);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_DISTANCE } })
+  );
 
   const reloadBookmarks = async () => {
     const bookmarks = await getAllBookmarks();
@@ -1055,6 +1190,7 @@ export default function RightPanel({
 
       return category.bookmarks.length > 0 || category.title.toLowerCase().includes(normalizedQuery);
     });
+  const sortableCategories = sourceCategories.filter((category) => !category.isSystem);
 
   const footerStatus = useMemo(() => {
     if (isAiProcessing) {
@@ -1101,14 +1237,6 @@ export default function RightPanel({
     }
 
     if (organizeCommand.action === 'create') {
-      if (!isDraftMode) {
-        setDraftVirtualCategories(cloneVirtualCategories(storedVirtualCategories));
-        setStatusMessage(null);
-        setAiGeneratedCategoryIds([]);
-        setAiSuggestedBookmarkIds([]);
-        return;
-      }
-
       const categoryId = `virtual-${Date.now()}`;
       const nextCategory: VirtualBookmarkCategory = {
         id: categoryId,
@@ -1118,7 +1246,7 @@ export default function RightPanel({
 
       setDraftVirtualCategories((current) => {
         if (!current) {
-          return [nextCategory];
+          return [...cloneVirtualCategories(storedVirtualCategories), nextCategory];
         }
 
         return [...cloneVirtualCategories(current), nextCategory];
@@ -1140,7 +1268,6 @@ export default function RightPanel({
       const nextDraftCategories = cloneVirtualCategories(draftVirtualCategories);
       setStoredVirtualCategories(nextDraftCategories);
       setDraftVirtualCategories(null);
-      setActiveDragType(null);
       setEditingCategoryId(null);
       setEditingTitle('');
       setAiGeneratedCategoryIds([]);
@@ -1152,7 +1279,6 @@ export default function RightPanel({
 
     if (organizeCommand.action === 'discard' && isDraftMode) {
       setDraftVirtualCategories(null);
-      setActiveDragType(null);
       setEditingCategoryId(null);
       setEditingTitle('');
       setAiGeneratedCategoryIds([]);
@@ -1455,6 +1581,18 @@ export default function RightPanel({
       bookmarkIds: category.bookmarkIds.filter((id) => id !== bookmarkId)
     }));
 
+  const findBookmarkLocation = (categories: VirtualBookmarkCategory[], bookmarkId: string) => {
+    for (const category of categories) {
+      const index = category.bookmarkIds.indexOf(bookmarkId);
+
+      if (index >= 0) {
+        return { categoryId: category.id, index };
+      }
+    }
+
+    return null;
+  };
+
   const insertBookmarkIntoCategory = (
     categories: VirtualBookmarkCategory[],
     categoryId: string,
@@ -1476,47 +1614,57 @@ export default function RightPanel({
       };
     });
 
-  const handleDragStart = (event: DragStartEvent) => {
+  const handleDragStart = () => {
     resetBookmarkEditor();
-    const type = event.active.data.current?.type;
-
-    if (type === 'category' || type === 'bookmark') {
-      setActiveDragType(type);
-    }
   };
 
   const handleDragOver = (event: DragOverEvent) => {
-    if (!dragEnabled || activeDragType !== 'bookmark' || !event.over) {
+    if (!dragEnabled || event.active.data.current?.type !== 'bookmark' || !event.over) {
       return;
     }
 
     const activeBookmarkId = String(event.active.id);
+    const overId = String(event.over.id);
+
+    if (activeBookmarkId === overId) {
+      return;
+    }
+
     const overType = event.over.data.current?.type;
     const overCategoryId =
       typeof event.over.data.current?.categoryId === 'string'
         ? event.over.data.current.categoryId
-        : String(event.over.id);
+        : overId;
 
     updateDraftVirtualCategories((current) => {
-      const withoutActive = removeBookmarkFromCategories(current, activeBookmarkId);
+      const activeLocation = findBookmarkLocation(current, activeBookmarkId);
 
       if (overCategoryId === UNCLASSIFIED_CATEGORY_ID) {
-        return withoutActive;
+        return activeLocation ? removeBookmarkFromCategories(current, activeBookmarkId) : current;
       }
 
-      const targetCategory = sourceCategories.find((category) => category.id === overCategoryId);
-      const overIndex =
-        overType === 'bookmark' && targetCategory
-          ? targetCategory.bookmarks.findIndex((bookmark) => bookmark.id === String(event.over?.id))
-          : undefined;
+      const targetCategory = current.find((category) => category.id === overCategoryId);
 
-      return insertBookmarkIntoCategory(withoutActive, overCategoryId, activeBookmarkId, overIndex);
+      if (!targetCategory) {
+        return current;
+      }
+
+      const overIndex =
+        overType === 'bookmark'
+          ? targetCategory.bookmarkIds.findIndex((bookmarkId) => bookmarkId === overId)
+          : -1;
+      const insertIndex = overIndex >= 0 ? overIndex : targetCategory.bookmarkIds.length;
+
+      if (activeLocation?.categoryId === overCategoryId && insertIndex === activeLocation.index) {
+        return current;
+      }
+
+      const withoutActive = removeBookmarkFromCategories(current, activeBookmarkId);
+      return insertBookmarkIntoCategory(withoutActive, overCategoryId, activeBookmarkId, insertIndex);
     });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDragType(null);
-
     if (!dragEnabled || !event.over) {
       return;
     }
@@ -1556,15 +1704,46 @@ export default function RightPanel({
         ) : (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={stableCollisionDetection}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <SortableContext
-              items={filteredCategories.filter((category) => !category.isSystem).map((category) => category.id)}
-              strategy={verticalListSortingStrategy}
-            >
+            {dragEnabled && sortableCategories.length > 0 ? (
+              <div className="bookmark-category-sorter">
+                <div className="bookmark-category-sorter-header">
+                  <span>Groups</span>
+                  <span>{sortableCategories.length} groups</span>
+                </div>
+                <SortableContext
+                  items={sortableCategories.map((category) => category.id)}
+                  strategy={rectSortingStrategy}
+                >
+                  <div className="bookmark-category-sort-list">
+                    {sortableCategories.map((category) => (
+                      <SortableCategoryRow
+                        key={category.id}
+                        category={category}
+                        isEditing={editingCategoryId === category.id}
+                        editingTitle={editingTitle}
+                        isAiGeneratedCategory={aiGeneratedCategoryIds.includes(category.id)}
+                        showAiReviewActions={
+                          aiGeneratedCategoryIds.includes(category.id) ||
+                          category.bookmarks.some((bookmark) => aiSuggestedBookmarkIds.includes(bookmark.id))
+                        }
+                        onStartEdit={startEditingCategory}
+                        onChangeEditingTitle={setEditingTitle}
+                        onCommitEdit={commitCategoryEdit}
+                        onDeleteCategory={deleteCategory}
+                        onAcceptAiCategory={acceptAiCategory}
+                        onRejectAiCategory={rejectAiCategory}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </div>
+            ) : null}
+            <div className="bookmark-section-list">
               {filteredCategories.map((category) => (
                 <SortableCategorySection
                   key={category.id}
@@ -1601,7 +1780,7 @@ export default function RightPanel({
                   onDeleteBookmark={deleteBookmarkItem}
                 />
               ))}
-            </SortableContext>
+            </div>
           </DndContext>
         )}
       </div>
