@@ -3,6 +3,17 @@
   font-family: system-ui, -apple-system, sans-serif;
   color: #333333;
   --page-bg: #f0efeb;
+  --accent: #6f8f7a;
+  --accent-soft: rgba(111, 143, 122, 0.16);
+  --accent-softer: rgba(111, 143, 122, 0.08);
+  --accent-border: rgba(111, 143, 122, 0.28);
+  --accent-border-strong: rgba(111, 143, 122, 0.44);
+  --accent-text: #446451;
+  --accent-shadow: rgba(111, 143, 122, 0.1);
+  --glass-highlight-bg: rgba(255, 255, 255, 0.88);
+  --glass-highlight-border: rgba(255, 255, 255, 0.88);
+  --glass-highlight-ring: rgba(255, 255, 255, 0.46);
+  --glass-highlight-shadow: rgba(15, 23, 42, 0.04);
 }
 
 * {
@@ -101,17 +112,17 @@ body {
 
 .item-card:hover {
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.48);
+  background: rgba(255, 255, 255, 0.36);
+  border-color: rgba(255, 255, 255, 0.56);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -1px 0 rgba(213, 203, 189, 0.1),
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 0 18px rgba(15, 23, 42, 0.022);
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(213, 203, 189, 0.08),
+    0 8px 22px rgba(15, 23, 42, 0.032);
 }
 
 .item-card:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.35);
+  outline: 2px solid var(--accent-border-strong);
   outline-offset: 2px;
 }
 
@@ -178,6 +189,7 @@ body {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 1px 2px rgba(16, 24, 40, 0.02);
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .bookmark-filter-input::placeholder {
@@ -256,8 +268,8 @@ body {
   min-height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
+  background: var(--accent-soft);
+  color: var(--accent-text);
   font-size: 11px;
   font-weight: 600;
 }
@@ -295,10 +307,32 @@ body {
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.56),
+    inset 0 -1px 0 rgba(213, 203, 189, 0.08),
+    0 6px 16px rgba(15, 23, 42, 0.025);
+  transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
 .bookmark-icon-button:hover {
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--glass-highlight-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.74),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.36),
+    0 6px 16px var(--glass-highlight-shadow);
+}
+
+.bookmark-icon-button:focus-visible,
+.bookmark-icon-button.active {
+  outline: none;
+  background: var(--glass-highlight-bg);
+  color: #344054;
+  border-color: var(--glass-highlight-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 0 0 2px var(--glass-highlight-ring),
+    0 6px 16px var(--glass-highlight-shadow);
 }
 
 .bookmark-icon-button svg {
@@ -309,17 +343,31 @@ body {
 .hover-action-button {
   min-width: 28px;
   padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
   opacity: 0.34;
   transform: translateY(1px);
   pointer-events: auto;
-  transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.hover-action-button:hover,
+.hover-action-button:focus-visible,
+.hover-action-button.active {
+  border-color: var(--glass-highlight-border);
+  background: var(--glass-highlight-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 0 0 2px var(--glass-highlight-ring),
+    0 6px 16px var(--glass-highlight-shadow);
 }
 
 .hover-action-button.active {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
-  background: rgba(255, 255, 255, 0.92);
 }
 
 .bookmark-review-button {
@@ -335,9 +383,22 @@ body {
 }
 
 .pin-icon-button.active {
-  border-color: rgba(59, 130, 246, 0.2);
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
+  border-color: rgba(111, 143, 122, 0.34);
+  background: rgba(111, 143, 122, 0.14);
+  color: var(--accent-text);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.44),
+    0 0 0 1px rgba(111, 143, 122, 0.08);
+}
+
+.pin-icon-button.active:hover,
+.pin-icon-button.active:focus-visible {
+  border-color: rgba(111, 143, 122, 0.4);
+  background: rgba(111, 143, 122, 0.15);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 0 2px rgba(255, 255, 255, 0.36),
+    0 6px 16px rgba(111, 143, 122, 0.08);
 }
 
 .pin-icon-button svg {
@@ -349,7 +410,7 @@ body {
   width: 180px;
   height: 34px;
   padding: 0 10px;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 8px;
   outline: none;
   background: rgba(255, 255, 255, 0.82);
@@ -429,7 +490,7 @@ body {
 }
 
 .bookmark-grid.dropzone-active {
-  outline: 2px dashed rgba(59, 130, 246, 0.28);
+  outline: 2px dashed var(--accent-border);
   outline-offset: 8px;
   border-radius: 14px;
 }
@@ -595,7 +656,7 @@ body {
   min-width: 0;
   height: 30px;
   padding: 0 8px;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 8px;
   outline: none;
   background: rgba(255, 255, 255, 0.92);
@@ -723,10 +784,13 @@ body {
   min-width: 0;
   height: 30px;
   padding: 0 8px;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(91, 99, 115, 0.18);
   border-radius: 8px;
   outline: none;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    0 1px 2px rgba(15, 23, 42, 0.035);
   color: #1f2937;
   font: inherit;
 }
@@ -821,11 +885,14 @@ body {
 .bookmark-card-textarea {
   min-height: 60px;
   padding: 8px 10px;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(91, 99, 115, 0.18);
   border-radius: 8px;
   outline: none;
   resize: vertical;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    0 1px 2px rgba(15, 23, 42, 0.035);
   color: #1f2937;
   font: inherit;
 }
@@ -870,8 +937,8 @@ body {
 }
 
 .action-menu-item:hover {
-  background: rgba(59, 130, 246, 0.08);
-  color: #1d4ed8;
+  background: var(--accent-softer);
+  color: var(--accent-text);
 }
 
 .action-menu-item-danger {
@@ -938,10 +1005,10 @@ body {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 16px;
-  border: 1px solid rgba(59, 130, 246, 0.18);
+  border: 1px solid var(--accent-border);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.06);
+  box-shadow: 0 8px 24px var(--accent-shadow);
 }
 
 .bookmark-sandbox-content {
@@ -951,7 +1018,7 @@ body {
 }
 
 .bookmark-sandbox-title {
-  color: #1d4ed8;
+  color: var(--accent-text);
   font-size: 13px;
   font-weight: 700;
 }
@@ -983,14 +1050,24 @@ body {
 }
 
 .bookmark-primary-button {
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 1px 2px rgba(15, 23, 42, 0.025);
 }
 
-.bookmark-primary-button:hover {
-  background: rgba(59, 130, 246, 0.16);
-  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.08);
+.bookmark-primary-button:hover,
+.bookmark-primary-button:focus-visible {
+  outline: none;
+  border-color: var(--accent-border-strong);
+  background: var(--accent-soft);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    0 0 0 2px var(--glass-highlight-ring),
+    0 6px 16px var(--accent-shadow);
 }
 
 .bookmark-secondary-button {
@@ -1060,7 +1137,23 @@ body {
 }
 
 .floating-mode-trigger:hover {
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--glass-highlight-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.74),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.36),
+    0 10px 30px rgba(0, 0, 0, 0.07);
+}
+
+.settings-trigger:focus-visible,
+.floating-mode-trigger:focus-visible {
+  outline: none;
+  border-color: var(--glass-highlight-border);
+  background: var(--glass-highlight-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 0 0 2px var(--glass-highlight-ring),
+    0 10px 30px rgba(0, 0, 0, 0.07);
 }
 
 .floating-mode-trigger svg,
@@ -1267,9 +1360,9 @@ body {
 }
 
 .settings-chip.active {
-  border-color: rgba(59, 130, 246, 0.2);
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .settings-color-grid {
@@ -1292,8 +1385,8 @@ body {
 }
 
 .settings-color-swatch.active {
-  border-color: rgba(29, 78, 216, 0.7);
-  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .settings-button-grid {
@@ -1320,6 +1413,10 @@ body {
   font-size: 12px;
 }
 
+.settings-radio input {
+  accent-color: var(--accent);
+}
+
 .settings-primary-button,
 .settings-upload,
 .settings-secondary-button {
@@ -1331,18 +1428,28 @@ body {
   border-radius: 10px;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .settings-primary-button {
-  border: 1px solid rgba(59, 130, 246, 0.24);
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 1px 2px rgba(15, 23, 42, 0.025);
 }
 
-.settings-primary-button:hover {
-  background: rgba(59, 130, 246, 0.16);
-  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.08);
+.settings-primary-button:hover,
+.settings-primary-button:focus-visible {
+  outline: none;
+  border-color: var(--accent-border-strong);
+  background: var(--accent-soft);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    0 0 0 2px var(--glass-highlight-ring),
+    0 6px 16px var(--accent-shadow);
 }
 
 .settings-upload,
@@ -1368,6 +1475,39 @@ body {
   color: #344054;
   font: inherit;
   outline: none;
+}
+
+.bookmark-category-input,
+.bookmark-filter-input,
+.left-item-input,
+.bookmark-card-input,
+.bookmark-card-textarea,
+.settings-text-input {
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.bookmark-category-input:focus,
+.bookmark-filter-input:focus,
+.left-item-input:focus,
+.bookmark-card-input:focus,
+.bookmark-card-textarea:focus,
+.settings-text-input:focus {
+  border-color: rgba(91, 99, 115, 0.16);
+  background: var(--glass-highlight-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 6px 16px var(--glass-highlight-shadow);
+}
+
+.bookmark-filter-input:focus {
+  border-color: rgba(255, 255, 255, 0.54);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 6px 16px rgba(15, 23, 42, 0.03);
 }
 
 .settings-note,
@@ -1405,8 +1545,9 @@ body {
 }
 
 .settings-token-button {
-  min-height: 32px;
-  padding: 0 12px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
   flex-shrink: 0;
 }
 

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Luma Tab Accent Palette Preview</title>
+    <style>
+      :root {
+        color: #1f2937;
+        background: #f0efeb;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 48px;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.24)),
+          #f0efeb;
+      }
+
+      main {
+        display: grid;
+        gap: 18px;
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 4px;
+        font-size: 24px;
+      }
+
+      p {
+        margin: 0 0 18px;
+        color: #667085;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        --accent: #c28b42;
+        --accent-soft: rgba(194, 139, 66, 0.16);
+        --accent-border: rgba(194, 139, 66, 0.3);
+        --accent-text: #835b27;
+        padding: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.42);
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.045);
+        backdrop-filter: blur(12px) saturate(140%);
+      }
+
+      .sage {
+        --accent: #6f8f7a;
+        --accent-soft: rgba(111, 143, 122, 0.16);
+        --accent-border: rgba(111, 143, 122, 0.28);
+        --accent-text: #446451;
+      }
+
+      .teal {
+        --accent: #4f9a9a;
+        --accent-soft: rgba(79, 154, 154, 0.15);
+        --accent-border: rgba(79, 154, 154, 0.28);
+        --accent-text: #2f6868;
+      }
+
+      .amber {
+        --accent: #c28b42;
+        --accent-soft: rgba(194, 139, 66, 0.16);
+        --accent-border: rgba(194, 139, 66, 0.3);
+        --accent-text: #835b27;
+      }
+
+      .slate {
+        --accent: #64748b;
+        --accent-soft: rgba(100, 116, 139, 0.14);
+        --accent-border: rgba(100, 116, 139, 0.26);
+        --accent-text: #334155;
+      }
+
+      .title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+        font-weight: 800;
+      }
+
+      .swatch {
+        width: 36px;
+        height: 36px;
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        border-radius: 10px;
+        background: var(--accent);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+      }
+
+      .sample {
+        display: grid;
+        gap: 10px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 38px;
+        border: 1px solid var(--accent-border);
+        border-radius: 10px;
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-weight: 700;
+      }
+
+      .input {
+        min-height: 36px;
+        padding: 0 10px;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.78);
+        color: #344054;
+      }
+
+      .badge {
+        justify-self: start;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      code {
+        color: #667085;
+        font-size: 12px;
+      }
+
+      @media (max-width: 900px) {
+        body {
+          padding: 24px;
+        }
+
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div>
+        <h1>Luma Tab Accent Palette Preview</h1>
+        <p>Compare the accent color on buttons, focused surfaces, and badges.</p>
+      </div>
+
+      <section class="grid">
+        <article class="card sage">
+          <div class="title"><span>Sage Green</span><span class="swatch"></span></div>
+          <div class="sample">
+            <div class="button">Run</div>
+            <div class="input">Focused glass input</div>
+            <div class="badge">AI Category</div>
+            <code>#6f8f7a</code>
+          </div>
+        </article>
+
+        <article class="card teal">
+          <div class="title"><span>Teal</span><span class="swatch"></span></div>
+          <div class="sample">
+            <div class="button">Run</div>
+            <div class="input">Focused glass input</div>
+            <div class="badge">AI Category</div>
+            <code>#4f9a9a</code>
+          </div>
+        </article>
+
+        <article class="card amber">
+          <div class="title"><span>Warm Amber</span><span class="swatch"></span></div>
+          <div class="sample">
+            <div class="button">Run</div>
+            <div class="input">Focused glass input</div>
+            <div class="badge">AI Category</div>
+            <code>#c28b42</code>
+          </div>
+        </article>
+
+        <article class="card slate">
+          <div class="title"><span>Slate</span><span class="swatch"></span></div>
+          <div class="sample">
+            <div class="button">Run</div>
+            <div class="input">Focused glass input</div>
+            <div class="badge">AI Category</div>
+            <code>#64748b</code>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-import { Settings2, X } from 'lucide-react';
+import { Eye, Settings2, X } from 'lucide-react';
 import { type WheelEvent as ReactWheelEvent, useEffect, useRef, useState } from 'react';
 
 interface SettingsPanelProps {
@@ -257,10 +257,10 @@ export default function SettingsPanel({
 
               <section className="settings-section">
                 <div className="settings-section-header">
-                  <div className="settings-section-title">Left Sidebar Hidden Domains</div>
-                  <div className="settings-section-description">
-                    Hidden domains will not appear in Common Entrances or Continue Browsing.
-                  </div>
+                  <div className="settings-section-title">Hidden Domain</div>
+                  {hiddenLeftPanelDomains.length === 0 ? (
+                    <div className="settings-section-description">Hide domains from the left sidebar.</div>
+                  ) : null}
                 </div>
                 <div className="settings-actions-column">
                   {hiddenLeftPanelDomains.length > 0 ? (
@@ -270,10 +270,12 @@ export default function SettingsPanel({
                           <span className="settings-token-label">{domain}</span>
                           <button
                             type="button"
-                            className="settings-secondary-button settings-token-button"
+                            className="bookmark-icon-button settings-token-button"
+                            aria-label={`Unhide ${domain}`}
+                            title="Unhide"
                             onClick={() => void onUnhideLeftPanelDomain(domain)}
                           >
-                            Unhide
+                            <Eye size={14} strokeWidth={1.8} />
                           </button>
                         </div>
                       ))}
