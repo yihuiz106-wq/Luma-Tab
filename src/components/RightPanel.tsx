@@ -129,6 +129,7 @@ interface SortableCategoryRowProps {
   onDeleteCategory: (categoryId: string) => void;
   onAcceptAiCategory: (categoryId: string) => void;
   onRejectAiCategory: (categoryId: string) => void;
+  onJumpToCategory: (categoryId: string) => void;
 }
 
 interface RightPanelProps {
@@ -577,7 +578,8 @@ function SortableCategoryRow({
   onCommitEdit,
   onDeleteCategory,
   onAcceptAiCategory,
-  onRejectAiCategory
+  onRejectAiCategory,
+  onJumpToCategory
 }: SortableCategoryRowProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: category.id,
@@ -607,7 +609,15 @@ function SortableCategoryRow({
       >
         <GripVertical size={14} strokeWidth={1.8} />
       </button>
-      <div className="bookmark-category-sort-main">
+      <button
+        type="button"
+        className={`bookmark-category-sort-main${isEditing ? ' editing' : ''}`}
+        onClick={() => {
+          if (!isEditing) {
+            onJumpToCategory(category.id);
+          }
+        }}
+      >
         {isEditing ? (
           <input
             className="bookmark-category-input"
@@ -627,10 +637,10 @@ function SortableCategoryRow({
         ) : (
           <span className="bookmark-section-name">{category.title}</span>
         )}
-        {isAiGeneratedCategory ? <span className="bookmark-ai-badge">AI Category</span> : null}
-        <span className="bookmark-section-meta">{category.bookmarks.length} items</span>
-      </div>
-      <span className="bookmark-section-actions">
+        {!isEditing && isAiGeneratedCategory ? <span className="bookmark-ai-badge">AI Category</span> : null}
+        {!isEditing ? <span className="bookmark-section-meta">{category.bookmarks.length} items</span> : null}
+      </button>
+      {!isEditing ? <span className="bookmark-section-actions">
         {showAiReviewActions ? (
           <>
             <button
@@ -667,7 +677,7 @@ function SortableCategoryRow({
         >
           <Trash2 size={14} strokeWidth={1.8} />
         </button>
-      </span>
+      </span> : null}
     </div>
   );
 }
@@ -722,6 +732,7 @@ function SortableCategorySection({
 
   return (
     <section
+      id={`bookmark-category-${category.id}`}
       className={`bookmark-section${isExpanded ? '' : ' collapsed'}${isHeaderDropTargetOver ? ' drop-target-active' : ''}`}
     >
       <div
@@ -1315,6 +1326,19 @@ export default function RightPanel({
     window.location.href = url;
   };
 
+  const jumpToCategory = (categoryId: string) => {
+    const categoryElement = document.getElementById(`bookmark-category-${categoryId}`);
+
+    if (!categoryElement) {
+      return;
+    }
+
+    categoryElement.scrollIntoView({
+      block: 'start',
+      behavior: 'smooth'
+    });
+  };
+
   const getDisplayTitle = (bookmark: BookmarkItem) => urlNameCache[bookmark.url] || bookmark.title;
   const getBookmarkDescription = (bookmarkId: string) => bookmarkMetadata[bookmarkId]?.description ?? '';
 
@@ -1737,6 +1761,7 @@ export default function RightPanel({
                         onDeleteCategory={deleteCategory}
                         onAcceptAiCategory={acceptAiCategory}
                         onRejectAiCategory={rejectAiCategory}
+                        onJumpToCategory={jumpToCategory}
                       />
                     ))}
                   </div>

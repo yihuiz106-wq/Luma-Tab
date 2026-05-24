@@ -1,258 +1,253 @@
 # Luma Tab
 
-Luma Tab 是一个用于替换 Chrome 新标签页的扩展，目标是把「常用页面、书签整理、轻量 AI 分类」放进一个安静、易用的工作台里。
+Luma Tab 是一个替代 Chrome 新标签页的扩展。它把「常用入口」「最近值得继续的页面」「可编辑书签分组」和「轻量 AI 整理」放进同一个工作台里，目标不是做一个更重的书签管理器，而是让你每次打开新标签页时，能更快回到正在做的事。
 
-项目当前基于 `React + TypeScript + Vite` 开发，并通过 Chrome Extension Manifest V3 运行。
+项目基于 `React + TypeScript + Vite` 构建，运行在 Chrome Extension Manifest V3 上。
 
-## 界面示意
+## Screenshot
 
-下面这张图直接使用项目当前界面的真实截图，用来展示整体布局、左侧继续浏览区域和右侧分组书签面板的实际效果。
+![Luma Tab screenshot](docs/readme-case.png)
 
-![Luma Tab case screenshot](docs/readme-case.png)
-
-## 功能特性
+## What It Does
 
 - 替换 Chrome 新标签页
 - 读取并展示浏览器书签
-- 支持手动创建分组、拖拽整理、重命名和删除书签
-- 支持固定常用页面
-- 根据最近访问记录生成 `Continue` 区域，方便继续上次工作
-- 接入 DeepSeek，对书签进行 AI 分组和页面名称简化
-- 支持导出 / 导入应用数据，便于迁移配置
+- 支持自定义书签分组，并将未分组书签自动收纳到 `Unclassified`
+- 支持拖拽调整分组和书签顺序
+- 支持新建分组、重命名分组、删除分组
+- 支持编辑书签标题、链接和描述
+- 支持固定常用页面到左侧快捷区
+- 基于最近使用时长和时间新鲜度生成 `Continue Browsing`
+- 支持隐藏不想出现在左侧的域名，并在设置面板恢复
+- 接入 DeepSeek，支持整批分类、仅整理未分组书签，以及页面名称精简
+- 新增书签时可尝试自动归入已有分组
+- 支持导出 / 导入本地数据
 
-## 技术栈
+## Product Structure
+
+页面主要分成三块：
+
+- 左侧栏：显示问候、时间、固定入口和 `Continue Browsing`
+- 中右主区：显示书签搜索、分组列表和书签卡片
+- 右上角浮层入口：`Settings` 和 `Edit`
+
+### Left Panel
+
+左侧栏由 [`src/components/LeftPanel.tsx`](/Users/zyh/Projects/Luma%20Tab/src/components/LeftPanel.tsx) 驱动，负责两个核心场景：
+
+- `Common Entrances`
+  - 来自 `pinnedPages`
+  - 适合长期固定的常用入口
+- `Continue Browsing`
+  - 来自后台记录的 `rawTimeLog`
+  - 更偏向最近真的花过时间、值得继续的页面
+
+`Continue Browsing` 不是简单罗列浏览历史，而是会：
+
+- 过滤停留时间过短的记录
+- 按 URL 聚合最近 72 小时内的使用数据
+- 按“最近访问 + 使用时长”综合排序
+- 最多展示 6 条
+
+左侧项目支持：
+
+- 点击直接打开页面
+- 一键固定 / 取消固定
+- 自定义名称
+- 从继续浏览列表中隐藏某个域名
+
+如果配置了 DeepSeek API Key，左侧栏还会尝试把冗长网页标题精简成更适合扫读的短名称，并缓存到 `urlNameCache`。
+
+### Bookmark Area
+
+右侧书签区由 [`src/components/RightPanel.tsx`](/Users/zyh/Projects/Luma%20Tab/src/components/RightPanel.tsx) 驱动，负责书签浏览和分组编辑。
+
+当前支持：
+
+- 书签搜索
+- 分组展开 / 收起
+- 拖拽排序分组
+- 拖拽书签到不同分组
+- 在编辑态下新建分组、重命名、删除
+- 编辑单条书签的标题、URL 和描述
+- 对 AI 生成的新分组进行接受或拒绝
+- 在分组目录中点击某个分组名称后，平滑滚动跳转到对应内容区域
+
+分组数据保存在 `bookmarkPanelState.virtualCategories`，未被分配到任何分组的书签会自动落入系统分组 `Unclassified`。
+
+### Settings And Edit Popovers
+
+- [`src/components/SettingsPanel.tsx`](/Users/zyh/Projects/Luma%20Tab/src/components/SettingsPanel.tsx)
+  - 保存 / 清除 DeepSeek API Key
+  - 导出 / 导入本地数据
+  - 管理被隐藏的左侧域名
+- [`src/components/OrganizePanel.tsx`](/Users/zyh/Projects/Luma%20Tab/src/components/OrganizePanel.tsx)
+  - 进入草稿编辑态
+  - 新建分组
+  - 保存或取消本次整理
+  - 校验 AI 分类链路
+  - 运行整批 AI 分类
+
+## AI Workflow
+
+AI 能力集中在 [`src/lib/deepseek.ts`](/Users/zyh/Projects/Luma%20Tab/src/lib/deepseek.ts) 和 [`src/background.ts`](/Users/zyh/Projects/Luma%20Tab/src/background.ts)。
+
+目前有三类 AI 使用方式：
+
+1. 全量分类
+   - 对所有书签重新生成 4-6 个核心分组
+2. 增量分类
+   - 新增书签后，尝试自动归入已有分组
+3. 名称精简
+   - 为左侧继续浏览项目生成更短、更稳定的展示名称
+
+实现上有几个比较重要的约束：
+
+- 请求模型为 `deepseek-v4-flash`
+- 提示词要求模型只返回合法 JSON
+- 未命中的内容会回退到 `Unclassified`
+- API Key 为空时不会触发 AI 请求
+- API Key 会优先走 [`src/lib/secureStorage.ts`](/Users/zyh/Projects/Luma%20Tab/src/lib/secureStorage.ts) 中的加密存储逻辑
+
+## Storage Model
+
+应用主要把状态存到 `chrome.storage.local`，关键字段包括：
+
+- `bookmarkPanelState`：分组展开状态和虚拟分组结构
+- `pinnedPages`：左侧固定入口
+- `rawTimeLog`：最近浏览时长日志
+- `urlNameCache`：AI 精简后的页面名称缓存
+- `bookmarkMetadata`：书签描述等附加信息
+- `hiddenLeftPanelDomains`：被隐藏的继续浏览域名
+
+后台脚本会监听标签页切换和窗口焦点变化，把足够长的浏览会话写入 `rawTimeLog`，从而支撑 `Continue Browsing` 的推荐结果。
+
+## Tech Stack
 
 - React 18
 - TypeScript
-- Vite
-- `@dnd-kit` 拖拽排序
-- `lucide-react` 图标
+- Vite 5
 - Chrome Extension Manifest V3
+- `@dnd-kit` for drag and drop
+- `lucide-react` for icons
 
-## 权限说明
+## Permissions
 
 扩展当前使用以下权限：
 
 - `bookmarks`：读取和整理浏览器书签
-- `storage`：保存分组、固定页面、缓存和 API Key
-- `tabs`：配合页面打开与访问记录能力
-- `https://api.deepseek.com/*`：调用 DeepSeek 接口进行 AI 分类
+- `storage`：保存分组、缓存、设置和本地数据
+- `tabs`：记录活跃页面，用于继续浏览和自动整理流程
+- `https://api.deepseek.com/*`：调用 DeepSeek API
 
-## 安装方式
+## Install
 
-### 方式一：加载已构建版本
+### Option 1: Load Included Release
 
-仓库里已包含 `release/` 目录，可直接加载解压后的扩展：
+仓库已经包含可直接加载的发布目录：
 
-1. 打开 Chrome 并访问 `chrome://extensions/`
+1. 打开 `chrome://extensions/`
 2. 开启右上角 `Developer mode`
 3. 点击 `Load unpacked`
-4. 选择 `release/Luma-Tab-v1.0.1/` 目录
+4. 选择 `release/Luma-Tab-v1.0.1/`
 
-如果你使用压缩包，也可以先解压：
+仓库里也保留了旧版本产物：
 
+- `release/Luma-Tab-v1.0.0/`
 - `release/Luma-Tab-v1.0.0-unpacked.zip`
 
-### 方式二：本地开发构建后加载
+### Option 2: Build Locally
 
 ```bash
 npm install
 npm run build
 ```
 
-构建完成后，在 Chrome 扩展页面加载构建产物目录即可。
+构建完成后，将生成结果作为 unpacked extension 加载到 Chrome。
 
-提示：当前项目的发布产物位于 `release/`，如果你希望把 Vite 默认构建结果直接用于扩展加载，建议先确认构建输出目录与 `manifest.json`、背景脚本路径是否一致。
-
-## 本地开发
-
-安装依赖：
+## Local Development
 
 ```bash
 npm install
-```
-
-启动 Vite 开发环境：
-
-```bash
 npm run dev
 ```
 
-生产构建：
+可用脚本：
 
-```bash
-npm run build
-```
+- `npm run dev`：启动 Vite 开发环境
+- `npm run build`：执行 TypeScript 检查并构建
+- `npm run preview`：预览构建结果
 
-预览构建结果：
+## Typical Usage
 
-```bash
-npm run preview
-```
+### 1. 配置 API Key
 
-## 使用说明
+打开新标签页，点击右上角 `Settings`：
 
-### 1. 设置 DeepSeek API Key
-
-打开新标签页后，点击右上角 `Settings`：
-
-- 在 `API` 区域填入 DeepSeek API Key
-- 点击 `Save Key` 保存
-- 如需清除可点击 `Clear Key`
-
-未配置 API Key 时，AI 分类相关功能不可用。
+- 在 `API` 区域输入 DeepSeek API Key
+- 点击 `Save Key`
+- 需要清空时点击 `Clear Key`
 
 ### 2. 整理书签
 
-点击页面中的 `Edit` 按钮后可以：
+点击右上角 `Edit`：
 
-- 新建分组
-- 拖拽排序书签和分组
-- 编辑书签标题、链接和描述
-- 删除书签或取消本次草稿修改
+- `New Group` 新建分组
+- 直接拖拽分组和书签
+- 在编辑态中修改分组名
+- 打开书签卡片菜单，编辑标题、链接和描述
+- `Save` 保存草稿，`Cancel` 放弃草稿
 
-### 3. 使用 AI 分类
+### 3. 运行 AI 分类
 
-在 `Edit` 面板的 `AI` 区域中：
+在 `Edit` 面板中：
 
-- `Sort all`：对全部书签重新分组
-- `Sort ungrouped`：仅整理未分组书签
-- `Check`：先验证当前 AI 能力是否可用
-- `Run`：执行 AI 分类
+- `Sort all`：重建整套分组
+- `Sort ungrouped`：仅处理未分组书签
+- `Check`：先验证当前 API 和提示词链路
+- `Run`：执行分类
 
-### 4. 迁移数据
+### 4. 使用继续浏览
 
-在 `Settings` 的 `Data` 区域中：
+左侧 `Continue Browsing` 会展示最近真正使用过的页面。你可以：
 
-- `Export`：导出当前配置与数据
-- `Import`：导入之前导出的数据文件
+- 直接继续打开
+- 将其中某项固定到 `Common Entrances`
+- 隐藏不想再看到的域名
+- 修改展示名称，让列表更贴近自己的心智模型
 
-这适合重装扩展、切换设备或备份分类结果时使用。
+### 5. 迁移数据
 
-## 左侧栏逻辑
+在 `Settings > Data` 中：
 
-左侧栏由 [`src/components/LeftPanel.tsx`](/Users/zyh/Projects/Luma%20Tab/src/components/LeftPanel.tsx) 驱动，核心目标是把“我主动固定的重要入口”和“我最近可能还要继续看的页面”同时放到视线最短路径上。
+- `Export` 导出当前本地数据
+- `Import` 导回之前的配置和整理结果
 
-### 1. 两块数据，各自解决不同问题
-
-- `Common Entrances` 对应 `pinnedPages`
-  - 数据来源是本地存储里的固定页面列表，读取函数是 [`getPinnedPages()`](/Users/zyh/Projects/Luma%20Tab/src/lib/storage.ts)
-  - 这部分是用户显式维护的快捷入口，强调稳定和可控
-- `Continue Browsing` 对应 `rawTimeLog`
-  - 数据来源是浏览记录时间日志，读取函数是 [`getRawTimeLog()`](/Users/zyh/Projects/Luma%20Tab/src/lib/storage.ts)
-  - 组件会先过滤停留时间太短的记录，再按域名聚合，最后只保留每个站点最近一次值得继续的页面
-
-### 2. Continue 区域如何算出来
-
-左侧栏里有两个关键辅助函数：
-
-- `getEntryDomain(entry)`
-  - 优先使用日志里已有的 `domain`
-  - 如果没有，就从 URL 里解析 hostname，并去掉 `www.`
-- `buildContinuePages(entries)`
-  - 先过滤掉停留时间不足 `3 * 60 * 1000` 毫秒的记录
-  - 再按域名分组，只保留每个域名最新的一条
-  - 最后按最近访问时间倒序排列，并截断为最多 6 条
-
-这意味着左侧栏不会简单地把所有历史访问都堆出来，而是更偏向“最近真正使用过、值得继续打开的页面”。
-
-### 3. 标题显示不是单一来源，而是三层兜底
-
-左侧栏显示名称时，不直接相信单一字段，而是做了分层回退：
-
-- 固定页名称优先级：`customName -> urlNameCache[url] -> bookmarkTitleByUrl[url] -> 原始 title`
-- Continue 名称优先级：`urlNameCache[url] -> bookmarkTitleByUrl[url] -> 访问记录里的 title`
-
-这套逻辑的价值是：
-
-- 用户手动改过的名字永远优先
-- 如果某个页面名称被 AI 简化过，可以复用到多个位置
-- 即使没有缓存，也还能退回浏览器书签标题或原始页面标题
-
-### 4. 为什么会去读全部书签
-
-组件初始化时不仅会读取固定页、时间日志和名称缓存，也会调用 `getAllBookmarks()`。原因不是为了重新渲染整个书签墙，而是为了做两件事：
-
-- 把 `pinnedPages` 和最新书签数据对齐，避免固定页标题、URL 已经变化但侧栏没更新
-- 构造 `bookmarkTitleByUrl`，作为左侧栏名称展示的一个兜底数据源
-
-代码里 `syncPinnedPagesWithBookmarks(...)` 就负责这一步同步。
-
-### 5. DeepSeek 在左侧栏里做什么
-
-左侧栏并不负责“整站分类”，但会调用 `simplifyPageNamesWithDeepSeek(...)` 做一件很实用的小事：把 Continue 区域里难读、太长或不稳定的页面标题改成更适合快速识别的短名称。
-
-这个过程有几个约束：
-
-- 只处理 `urlNameCache` 里还没有命中的页面
-- 只有用户配置了 DeepSeek API Key 才会触发
-- 结果会写回 `urlNameCache`，所以下次进入页面不需要重复请求
-- 组件内部用 `isRefreshingContinueNamesRef` 和 `pendingContinuePagesRef` 避免重复并发刷新
-
-换句话说，左侧栏里的 AI 不是“决定看什么”，而是“把已经值得继续看的页面命名得更顺手”。
-
-### 6. 左侧栏如何保持实时同步
-
-这个组件做了两层监听：
-
-- 监听 `chrome.bookmarks` 事件
-  - 当书签新增、删除、修改时，重新拉取书签并同步 `pinnedPages`
-- 监听 `chrome.storage.onChanged`
-  - `pinnedPages` 变化时，直接刷新固定入口
-  - `urlNameCache` 变化时，刷新展示名称
-  - `rawTimeLog` 变化时，重新计算 Continue 列表，并在必要时触发名称简化
-
-这让左侧栏即使不刷新整个页面，也能跟上后台追踪、设置修改和书签变动。
-
-### 7. 左侧栏支持哪些交互
-
-- 点击卡片：直接打开目标页面
-- Continue 卡片点击图钉：加入 `Common Entrances`
-- 固定页点击取消固定：从 `pinnedPages` 移除
-- 两类卡片都支持更多操作菜单
-  - 可编辑自定义名称
-  - Continue 项可从时间日志里移除对应域名记录
-- 编辑名称时支持 `Enter` 保存、`Escape` 取消、失焦自动保存
-
-整体上，左侧栏的设计取向不是做成第二个完整书签管理器，而是做成一个“轻量、即时、低打扰”的恢复工作区入口。
-
-## 项目结构
+## Project Structure
 
 ```text
 .
-├── docs/                   # README 使用的脱敏示意图等文档资源
-├── public/                 # 扩展清单、图标和静态资源
-├── release/                # 已打包的发布版本
+├── docs/                   # README 截图与文档资源
+├── public/                 # manifest、图标与静态资源
+├── release/                # 已打包的扩展版本
 ├── src/
-│   ├── components/         # 左侧栏、右侧书签区、设置面板等 UI 组件
-│   ├── lib/                # 存储、书签读取、背景图、DeepSeek 调用等能力
+│   ├── components/         # 左右面板、设置面板、编辑面板等 UI
+│   ├── lib/                # 存储、书签读取、AI、背景图等能力
 │   ├── types/              # 类型定义
-│   ├── App.tsx             # 应用主入口
-│   └── background.ts       # 扩展后台逻辑
+│   ├── App.tsx             # 应用装配入口
+│   └── background.ts       # 后台跟踪与增量 AI 分类
 ├── package.json
 └── vite.config.ts
 ```
 
-## 发布说明
+## Current Status
 
-当前仓库内可见的发布产物包括：
+这是一个已经可用、并且在持续细化交互的 Chrome 新标签页扩展。当前版本已经覆盖：
 
-- `release/Luma-Tab-v1.0.0/`
-- `release/Luma-Tab-v1.0.1/`
-- `release/Luma-Tab-v1.0.0-unpacked.zip`
+- 左侧工作恢复入口
+- 右侧书签分组工作区
+- DeepSeek 驱动的分类与标题精简
+- 本地数据导入导出
+- 新增书签后的增量自动归类
 
-如果要对外发布，建议在每次版本更新时同步：
-
-- 更新 `public/manifest.json` 中的版本号
-- 重新构建扩展资源
-- 在 `release/` 下保留对应版本目录或压缩包
-
-## 注意事项
-
-- DeepSeek 能力依赖你自己的 API Key，相关费用与配额由你的 DeepSeek 账户决定
-- API Key 当前保存在扩展本地存储中，适合个人使用场景
-- 如果书签数量很多，首次 AI 分类可能需要更长时间
-
-## License
-
-This project is licensed under the MIT License. See [LICENSE](/Users/zyh/Projects/Luma%20Tab/LICENSE).
+如果你想继续往下扩展，比较自然的方向会是主题系统、跨设备同步、更细粒度的筛选与统计能力。

@@ -211,6 +211,17 @@ body {
   gap: 8px;
   min-width: 0;
   flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bookmark-category-sort-main.editing {
+  cursor: text;
 }
 
 .bookmark-category-sort-main .bookmark-section-name {
