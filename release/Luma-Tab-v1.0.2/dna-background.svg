@@ -1,0 +1,261 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 2400 1350" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="center-light" cx="50%" cy="45%" r="68%">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.68" />
+      <stop offset="0.54" stop-color="#fff" stop-opacity="0.2" />
+      <stop offset="1" stop-color="#f0efeb" stop-opacity="0" />
+    </radialGradient>
+
+    <linearGradient id="strand-fill" x1="86" y1="-220" x2="274" y2="1716" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.98" />
+      <stop offset="0.42" stop-color="#fff" stop-opacity="0.72" />
+      <stop offset="1" stop-color="#fff" stop-opacity="0.92" />
+    </linearGradient>
+
+    <linearGradient id="strand-shade" x1="92" y1="-220" x2="268" y2="1716" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d6d0c6" stop-opacity="0.32" />
+      <stop offset="0.48" stop-color="#fff" stop-opacity="0.1" />
+      <stop offset="1" stop-color="#d6d0c6" stop-opacity="0.28" />
+    </linearGradient>
+
+    <g id="molecule" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 0 L34 22 L66 6" stroke-width="3" stroke-opacity="0.22" />
+      <path d="M34 22 L38 58" stroke-width="3" stroke-opacity="0.2" />
+      <circle cx="0" cy="0" r="7" fill="#fff" fill-opacity="0.24" stroke="#d6d0c6" stroke-opacity="0.22" />
+      <circle cx="34" cy="22" r="8" fill="#fff" fill-opacity="0.28" stroke="#d6d0c6" stroke-opacity="0.24" />
+      <circle cx="66" cy="6" r="6" fill="#fff" fill-opacity="0.22" stroke="#d6d0c6" stroke-opacity="0.18" />
+      <circle cx="38" cy="58" r="9" fill="#fff" fill-opacity="0.2" stroke="#d6d0c6" stroke-opacity="0.16" />
+    </g>
+
+    <g id="dna-rungs" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <g stroke="#d6d0c6" stroke-opacity="0.16" stroke-width="7.2">
+        <path d="M137.8 -173.5 L222.2 -173.5" />
+        <path d="M114 -99 L246 -99" />
+        <path d="M137.8 -24.5 L222.2 -24.5" />
+        <path d="M137.8 68.5 L222.2 68.5" />
+        <path d="M114 143 L246 143" />
+        <path d="M137.8 217.5 L222.2 217.5" />
+        <path d="M137.8 310.5 L222.2 310.5" />
+        <path d="M114 385 L246 385" />
+        <path d="M137.8 459.5 L222.2 459.5" />
+        <path d="M137.8 552.5 L222.2 552.5" />
+        <path d="M114 627 L246 627" />
+        <path d="M137.8 701.5 L222.2 701.5" />
+        <path d="M137.8 794.5 L222.2 794.5" />
+        <path d="M114 869 L246 869" />
+        <path d="M137.8 943.5 L222.2 943.5" />
+        <path d="M137.8 1036.5 L222.2 1036.5" />
+        <path d="M114 1111 L246 1111" />
+        <path d="M137.8 1185.5 L222.2 1185.5" />
+        <path d="M137.8 1278.5 L222.2 1278.5" />
+        <path d="M114 1353 L246 1353" />
+        <path d="M137.8 1427.5 L222.2 1427.5" />
+        <path d="M137.8 1520.5 L222.2 1520.5" />
+        <path d="M114 1595 L246 1595" />
+        <path d="M137.8 1669.5 L222.2 1669.5" />
+      </g>
+      <g stroke="#fff" stroke-opacity="0.42" stroke-width="4.8">
+        <path d="M137.8 -173.5 L222.2 -173.5" />
+        <path d="M114 -99 L246 -99" />
+        <path d="M137.8 -24.5 L222.2 -24.5" />
+        <path d="M137.8 68.5 L222.2 68.5" />
+        <path d="M114 143 L246 143" />
+        <path d="M137.8 217.5 L222.2 217.5" />
+        <path d="M137.8 310.5 L222.2 310.5" />
+        <path d="M114 385 L246 385" />
+        <path d="M137.8 459.5 L222.2 459.5" />
+        <path d="M137.8 552.5 L222.2 552.5" />
+        <path d="M114 627 L246 627" />
+        <path d="M137.8 701.5 L222.2 701.5" />
+        <path d="M137.8 794.5 L222.2 794.5" />
+        <path d="M114 869 L246 869" />
+        <path d="M137.8 943.5 L222.2 943.5" />
+        <path d="M137.8 1036.5 L222.2 1036.5" />
+        <path d="M114 1111 L246 1111" />
+        <path d="M137.8 1185.5 L222.2 1185.5" />
+        <path d="M137.8 1278.5 L222.2 1278.5" />
+        <path d="M114 1353 L246 1353" />
+        <path d="M137.8 1427.5 L222.2 1427.5" />
+        <path d="M137.8 1520.5 L222.2 1520.5" />
+        <path d="M114 1595 L246 1595" />
+        <path d="M137.8 1669.5 L222.2 1669.5" />
+      </g>
+      <g stroke="#fff" stroke-opacity="0.62" stroke-width="1.5">
+        <path d="M137.8 -173.5 L222.2 -173.5" />
+        <path d="M114 -99 L246 -99" />
+        <path d="M137.8 -24.5 L222.2 -24.5" />
+        <path d="M137.8 68.5 L222.2 68.5" />
+        <path d="M114 143 L246 143" />
+        <path d="M137.8 217.5 L222.2 217.5" />
+        <path d="M137.8 310.5 L222.2 310.5" />
+        <path d="M114 385 L246 385" />
+        <path d="M137.8 459.5 L222.2 459.5" />
+        <path d="M137.8 552.5 L222.2 552.5" />
+        <path d="M114 627 L246 627" />
+        <path d="M137.8 701.5 L222.2 701.5" />
+        <path d="M137.8 794.5 L222.2 794.5" />
+        <path d="M114 869 L246 869" />
+        <path d="M137.8 943.5 L222.2 943.5" />
+        <path d="M137.8 1036.5 L222.2 1036.5" />
+        <path d="M114 1111 L246 1111" />
+        <path d="M137.8 1185.5 L222.2 1185.5" />
+        <path d="M137.8 1278.5 L222.2 1278.5" />
+        <path d="M114 1353 L246 1353" />
+        <path d="M137.8 1427.5 L222.2 1427.5" />
+        <path d="M137.8 1520.5 L222.2 1520.5" />
+        <path d="M114 1595 L246 1595" />
+        <path d="M137.8 1669.5 L222.2 1669.5" />
+      </g>
+    </g>
+
+    <g id="dna-beads" fill="#fff" stroke="#d6d0c6" stroke-linecap="round" stroke-linejoin="round">
+      <g fill-opacity="0.4" stroke-opacity="0.2" stroke-width="2">
+        <circle cx="167" cy="-99" r="5.8" />
+        <circle cx="207" cy="68.5" r="6.6" />
+        <circle cx="156" cy="310.5" r="5.4" />
+        <circle cx="196" cy="459.5" r="6.2" />
+        <circle cx="141" cy="627" r="5.6" />
+        <circle cx="183" cy="794.5" r="6.4" />
+        <circle cx="214" cy="1036.5" r="5.8" />
+        <circle cx="153" cy="1185.5" r="6.8" />
+        <circle cx="198" cy="1353" r="5.5" />
+        <circle cx="171" cy="1520.5" r="6.1" />
+      </g>
+      <g fill-opacity="0.6" stroke-opacity="0">
+        <circle cx="164.8" cy="-101.2" r="2" />
+        <circle cx="204.7" cy="66.1" r="2.2" />
+        <circle cx="153.8" cy="308.6" r="1.9" />
+        <circle cx="193.8" cy="457.4" r="2" />
+        <circle cx="138.8" cy="624.8" r="1.8" />
+        <circle cx="180.8" cy="792.2" r="2.1" />
+        <circle cx="211.8" cy="1034.3" r="1.9" />
+        <circle cx="150.6" cy="1183" r="2.2" />
+        <circle cx="195.8" cy="1350.9" r="1.8" />
+        <circle cx="168.8" cy="1518.3" r="2" />
+      </g>
+    </g>
+
+    <g id="dna-helix" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <g>
+        <use href="#dna-rungs" xlink:href="#dna-rungs" />
+        <path
+          d="M180 -220 C92 -146 92 -52 180 22 C268 96 268 190 180 264 C92 338 92 432 180 506 C268 580 268 674 180 748 C92 822 92 916 180 990 C268 1064 268 1158 180 1232 C92 1306 92 1400 180 1474 C268 1548 268 1642 180 1716"
+          stroke="url(#strand-shade)"
+          stroke-width="18"
+          stroke-opacity="0.72"
+        />
+        <path
+          d="M180 -220 C268 -146 268 -52 180 22 C92 96 92 190 180 264 C268 338 268 432 180 506 C92 580 92 674 180 748 C268 822 268 916 180 990 C92 1064 92 1158 180 1232 C268 1306 268 1400 180 1474 C92 1548 92 1642 180 1716"
+          stroke="url(#strand-shade)"
+          stroke-width="18"
+          stroke-opacity="0.72"
+        />
+        <path
+          d="M180 -220 C92 -146 92 -52 180 22 C268 96 268 190 180 264 C92 338 92 432 180 506 C268 580 268 674 180 748 C92 822 92 916 180 990 C268 1064 268 1158 180 1232 C92 1306 92 1400 180 1474 C268 1548 268 1642 180 1716"
+          stroke="url(#strand-fill)"
+          stroke-width="11"
+          stroke-opacity="0.82"
+        />
+        <path
+          d="M180 -220 C268 -146 268 -52 180 22 C92 96 92 190 180 264 C268 338 268 432 180 506 C92 580 92 674 180 748 C268 822 268 916 180 990 C92 1064 92 1158 180 1232 C268 1306 268 1400 180 1474 C92 1548 92 1642 180 1716"
+          stroke="url(#strand-fill)"
+          stroke-width="11"
+          stroke-opacity="0.82"
+        />
+        <path
+          d="M174 -216 C88 -144 90 -54 180 18 C270 92 270 186 180 260 C90 334 90 428 180 502 C270 576 270 670 180 744 C90 818 90 912 180 986 C270 1060 270 1154 180 1228 C90 1302 90 1396 180 1470 C270 1544 270 1638 180 1712"
+          stroke="#fff"
+          stroke-width="2.8"
+          stroke-opacity="0.64"
+        />
+        <path
+          d="M186 -216 C272 -144 270 -54 180 18 C90 92 90 186 180 260 C270 334 270 428 180 502 C90 576 90 670 180 744 C270 818 270 912 180 986 C90 1060 90 1154 180 1228 C270 1302 270 1396 180 1470 C90 1544 90 1638 180 1712"
+          stroke="#fff"
+          stroke-width="2.8"
+          stroke-opacity="0.64"
+        />
+        <use href="#dna-beads" xlink:href="#dna-beads" />
+      </g>
+    </g>
+  </defs>
+
+  <rect width="2400" height="1350" fill="#f0efeb" />
+  <rect width="2400" height="1350" fill="url(#center-light)" />
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M-160 314 C228 210 468 516 788 378 C1072 256 1274 126 1542 232 C1832 346 2014 178 2560 86" stroke="#fff" stroke-opacity="0.24" stroke-width="1.8" />
+    <path d="M-120 822 C210 662 468 842 736 748 C1044 640 1238 826 1514 724 C1830 606 2090 604 2524 740" stroke="#fff" stroke-opacity="0.2" stroke-width="1.8" />
+    <path d="M-140 1112 C174 992 396 1198 760 1086 C1124 974 1336 1100 1644 1008 C1928 922 2150 1050 2540 932" stroke="#fff" stroke-opacity="0.18" stroke-width="1.5" />
+    <path d="M94 560 C358 390 644 412 878 566 C1150 744 1386 522 1626 422 C1872 320 2078 416 2384 308" stroke="#d6d0c6" stroke-opacity="0.13" stroke-width="1.7" />
+    <path d="M-82 702 C184 614 424 704 690 622 C980 534 1158 594 1422 514 C1670 438 1920 492 2464 384" stroke="#d6d0c6" stroke-opacity="0.12" stroke-width="1.4" />
+    <path d="M-180 456 C98 386 342 516 610 454 C874 394 1104 296 1358 360 C1624 426 1838 532 2540 404" stroke="#fff" stroke-opacity="0.12" stroke-width="1" />
+    <path d="M-96 1198 C210 1100 440 1194 716 1150 C990 1106 1194 1018 1488 1066 C1818 1120 2048 1044 2508 1114" stroke="#d6d0c6" stroke-opacity="0.08" stroke-width="1" />
+  </g>
+
+  <g fill="none" stroke="#fff" stroke-linecap="round" opacity="0.36">
+    <path d="M104 126 C260 54 432 60 588 146" stroke-width="5" stroke-dasharray="1 22" />
+    <path d="M850 1020 C1028 940 1196 946 1362 1028" stroke-width="5" stroke-dasharray="1 22" />
+    <path d="M1782 236 C1938 164 2110 170 2266 256" stroke-width="5" stroke-dasharray="1 22" />
+    <path d="M1760 1058 C1920 978 2116 994 2292 1090" stroke-width="5" stroke-dasharray="1 22" />
+  </g>
+
+  <g opacity="0.62">
+    <use href="#molecule" xlink:href="#molecule" transform="translate(420 228) rotate(-18) scale(0.86)" />
+    <use href="#molecule" xlink:href="#molecule" transform="translate(1518 792) rotate(22) scale(0.72)" />
+    <use href="#molecule" xlink:href="#molecule" transform="translate(1980 1110) rotate(-12) scale(0.64)" />
+    <use href="#molecule" xlink:href="#molecule" transform="translate(1010 456) rotate(15) scale(0.58)" />
+  </g>
+
+  <g fill="#fff" stroke="#d6d0c6" stroke-opacity="0.18">
+    <circle cx="230" cy="1042" r="22" fill-opacity="0.22" />
+    <circle cx="682" cy="206" r="18" fill-opacity="0.2" />
+    <circle cx="1058" cy="998" r="24" fill-opacity="0.2" />
+    <circle cx="1728" cy="372" r="15" fill-opacity="0.22" />
+    <circle cx="2138" cy="720" r="26" fill-opacity="0.19" />
+    <circle cx="2226" cy="124" r="18" fill-opacity="0.18" />
+    <circle cx="300" cy="624" r="10" fill-opacity="0.19" />
+    <circle cx="820" cy="790" r="12" fill-opacity="0.17" />
+    <circle cx="1270" cy="226" r="9" fill-opacity="0.18" />
+    <circle cx="1660" cy="1012" r="11" fill-opacity="0.19" />
+    <circle cx="2286" cy="1034" r="10" fill-opacity="0.18" />
+  </g>
+
+  <g fill="#fff" opacity="0.34">
+    <circle cx="116" cy="92" r="1.2" />
+    <circle cx="306" cy="68" r="0.9" />
+    <circle cx="472" cy="132" r="1" />
+    <circle cx="734" cy="306" r="0.8" />
+    <circle cx="982" cy="148" r="1.1" />
+    <circle cx="1268" cy="622" r="0.9" />
+    <circle cx="1526" cy="490" r="1" />
+    <circle cx="1846" cy="150" r="1.2" />
+    <circle cx="2154" cy="388" r="0.9" />
+    <circle cx="2308" cy="682" r="1.1" />
+    <circle cx="184" cy="816" r="0.8" />
+    <circle cx="426" cy="1036" r="1" />
+    <circle cx="704" cy="912" r="1.1" />
+    <circle cx="1118" cy="1184" r="0.8" />
+    <circle cx="1456" cy="1068" r="1" />
+    <circle cx="1744" cy="1212" r="0.9" />
+    <circle cx="2058" cy="1016" r="1.2" />
+    <circle cx="2340" cy="1196" r="0.8" />
+    <circle cx="96" cy="338" r="0.7" />
+    <circle cx="548" cy="584" r="0.9" />
+    <circle cx="946" cy="718" r="0.7" />
+    <circle cx="1376" cy="344" r="0.8" />
+    <circle cx="1888" cy="812" r="0.9" />
+    <circle cx="2180" cy="518" r="0.7" />
+    <circle cx="276" cy="1210" r="0.8" />
+    <circle cx="1328" cy="1228" r="0.7" />
+  </g>
+
+  <g>
+    <g opacity="0.39" transform="translate(-455 25) rotate(34 180 760) scale(1.5)">
+      <use href="#dna-helix" xlink:href="#dna-helix" />
+    </g>
+    <g opacity="0.4" transform="translate(1895 -235) rotate(-4 180 760) scale(1.13 1.2)">
+      <use href="#dna-helix" xlink:href="#dna-helix" />
+    </g>
+  </g>
+
+</svg>

@@ -163,21 +163,29 @@ AI 能力集中在 [`src/lib/deepseek.ts`](/Users/zyh/Projects/Luma%20Tab/src/li
 
 ## Install
 
-### Option 1: Load Included Release
+### Option 1: Load The Latest Release Snapshot
 
-仓库已经包含可直接加载的发布目录：
+如果你只是想直接安装当前仓库里最新整理好的扩展包，优先加载：
+
+- `release/Luma-Tab-v1.0.2/`
+- `release/Luma-Tab-v1.0.2-unpacked.zip`
+
+历史快照也仍然保留在仓库里：
+
+- `release/Luma-Tab-v1.0.1/`
+- `release/Luma-Tab-v1.0.0/`
+- `release/Luma-Tab-v1.0.0-unpacked.zip`
+
+加载方式：
 
 1. 打开 `chrome://extensions/`
 2. 开启右上角 `Developer mode`
 3. 点击 `Load unpacked`
-4. 选择 `release/Luma-Tab-v1.0.1/`
+4. 选择对应的 release 目录，或者先解压 zip 再加载
 
-仓库里也保留了旧版本产物：
+### Option 2: Build The Latest Source
 
-- `release/Luma-Tab-v1.0.0/`
-- `release/Luma-Tab-v1.0.0-unpacked.zip`
-
-### Option 2: Build Locally
+如果你想基于当前源码自己构建，或者继续开发，这是推荐方式：
 
 ```bash
 npm install
@@ -185,6 +193,11 @@ npm run build
 ```
 
 构建完成后，将生成结果作为 unpacked extension 加载到 Chrome。
+
+1. 打开 `chrome://extensions/`
+2. 开启右上角 `Developer mode`
+3. 点击 `Load unpacked`
+4. 选择本地构建输出目录
 
 ## Local Development
 
