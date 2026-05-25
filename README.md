@@ -18,6 +18,8 @@ Luma Tab 是一个替代 Chrome 新标签页的扩展。它把「常用入口」
 - 支持编辑书签标题、链接和描述
 - 支持固定常用页面到左侧快捷区
 - 基于最近使用时长和时间新鲜度生成 `Continue Browsing`
+- 支持对系列视频、课程、仓库、文档等上下文做聚合，只保留最后看的那一项
+- 为聚合后的 continue 项显示更明确的副标题，例如 `playlist`、`series`、`repo`、`course`
 - 支持隐藏不想出现在左侧的域名，并在设置面板恢复
 - 接入 DeepSeek，支持整批分类、仅整理未分组书签，以及页面名称精简
 - 新增书签时可尝试自动归入已有分组
@@ -45,9 +47,27 @@ Luma Tab 是一个替代 Chrome 新标签页的扩展。它把「常用入口」
 `Continue Browsing` 不是简单罗列浏览历史，而是会：
 
 - 过滤停留时间过短的记录
-- 按 URL 聚合最近 72 小时内的使用数据
+- 对最近 72 小时内的使用数据做规范化和聚合
 - 按“最近访问 + 使用时长”综合排序
 - 最多展示 6 条
+
+聚合规则目前分成两层：
+
+- 普通网页：按规范化后的 URL 聚合，并过滤常见分享 / 追踪参数
+- 上下文型站点：按“同一个工作或学习上下文”聚合，只保留最后看的那一项
+
+目前已经覆盖的上下文型站点包括：
+
+- `YouTube`：按 `playlist` 聚合
+- `Bilibili`：按 `series / collection / 多 P 视频` 聚合
+- `GitHub`：按 `owner/repo` 聚合
+- `Coursera`、`edX`、`Udemy`：按课程聚合
+- `Notion`：按 workspace / page 上下文聚合
+- `Google Docs / Sheets / Slides`：按文档 ID 聚合
+- `Figma`：按 file / prototype / figjam 资源聚合
+- `飞书 / Lark`：按 doc / sheet / base / wiki / minutes 资源聚合
+- `语雀`：按知识库聚合
+- `Confluence`：按 `space` 聚合
 
 左侧项目支持：
 
@@ -55,6 +75,7 @@ Luma Tab 是一个替代 Chrome 新标签页的扩展。它把「常用入口」
 - 一键固定 / 取消固定
 - 自定义名称
 - 从继续浏览列表中隐藏某个域名
+- 通过副标题快速识别当前条目属于 `playlist`、`course`、`repo`、`doc`、`sheet` 等哪种上下文
 
 如果配置了 DeepSeek API Key，左侧栏还会尝试把冗长网页标题精简成更适合扫读的短名称，并缓存到 `urlNameCache`。
 
@@ -120,7 +141,7 @@ AI 能力集中在 [`src/lib/deepseek.ts`](/Users/zyh/Projects/Luma%20Tab/src/li
 - `bookmarkMetadata`：书签描述等附加信息
 - `hiddenLeftPanelDomains`：被隐藏的继续浏览域名
 
-后台脚本会监听标签页切换和窗口焦点变化，把足够长的浏览会话写入 `rawTimeLog`，从而支撑 `Continue Browsing` 的推荐结果。
+后台脚本会监听标签页切换和窗口焦点变化，把足够长的浏览会话写入 `rawTimeLog`。左侧栏会在运行时基于这些原始记录计算 continue 分组 key、上下文类型和展示副标题，从而支撑 `Continue Browsing` 的推荐结果。
 
 ## Tech Stack
 
@@ -213,6 +234,7 @@ npm run dev
 
 - 直接继续打开
 - 将其中某项固定到 `Common Entrances`
+- 看到更明确的上下文副标题，例如 `playlist • youtube.com`、`repo • github.com`、`course • coursera.org`
 - 隐藏不想再看到的域名
 - 修改展示名称，让列表更贴近自己的心智模型
 
@@ -245,6 +267,7 @@ npm run dev
 这是一个已经可用、并且在持续细化交互的 Chrome 新标签页扩展。当前版本已经覆盖：
 
 - 左侧工作恢复入口
+- 面向视频、课程、仓库、文档工作流的 continue 上下文聚合
 - 右侧书签分组工作区
 - DeepSeek 驱动的分类与标题精简
 - 本地数据导入导出

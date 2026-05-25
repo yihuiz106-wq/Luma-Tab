@@ -18,11 +18,18 @@ import type { PinnedPage, TimeLogEntry } from '../types/app';
 
 interface FrequentSite {
   domain: string;
+  groupKey: string;
+  contextLabel: string | null;
   title: string;
   duration: number;
   totalDuration: number;
   lastUsedAt: number;
   url: string;
+}
+
+interface ContinueGroupInfo {
+  key: string;
+  contextLabel: string | null;
 }
 
 interface ContinueListItem extends FrequentSite {
@@ -34,6 +41,23 @@ const MIN_CONTINUE_DURATION = 3 * 60 * 1000;
 const CONTINUE_SCORE_DURATION_CAP = 3 * 60 * 60 * 1000;
 const CONTINUE_RECENCY_WEIGHT = 0.75;
 const CONTINUE_DURATION_WEIGHT = 0.25;
+const CONTINUE_URL_IGNORED_PARAMS = new Set([
+  'spm_id_from',
+  'vd_source',
+  'from',
+  'from_source',
+  'from_spmid',
+  'share_source',
+  'share_medium',
+  'share_plat',
+  'share_session_id',
+  'share_tag',
+  'si',
+  'feature',
+  'pp',
+  't',
+  'start'
+]);
 
 function getEntryDomain(entry: TimeLogEntry) {
   if (entry.domain) {
@@ -59,26 +83,543 @@ function getUrlDomain(url: string) {
   }
 }
 
-function getPinnedPageId(url: string) {
+function isYouTubeDomain(domain: string) {
+  return domain === 'youtube.com' || domain === 'm.youtube.com' || domain === 'youtu.be';
+}
+
+function isBilibiliDomain(domain: string) {
+  return domain === 'bilibili.com' || domain.endsWith('.bilibili.com') || domain === 'b23.tv';
+}
+
+function isGitHubDomain(domain: string) {
+  return domain === 'github.com';
+}
+
+function isCourseraDomain(domain: string) {
+  return domain === 'coursera.org';
+}
+
+function isEdxDomain(domain: string) {
+  return domain === 'edx.org' || domain === 'courses.edx.org' || domain.endsWith('.edx.org');
+}
+
+function isUdemyDomain(domain: string) {
+  return domain === 'udemy.com' || domain.endsWith('.udemy.com');
+}
+
+function isNotionDomain(domain: string) {
+  return domain === 'notion.so' || domain.endsWith('.notion.so') || domain.endsWith('.notion.site');
+}
+
+function isGoogleDocsDomain(domain: string) {
+  return domain === 'docs.google.com';
+}
+
+function isFigmaDomain(domain: string) {
+  return domain === 'figma.com' || domain === 'www.figma.com';
+}
+
+function isFeishuDomain(domain: string) {
+  return (
+    domain === 'feishu.cn' ||
+    domain.endsWith('.feishu.cn') ||
+    domain === 'larksuite.com' ||
+    domain.endsWith('.larksuite.com')
+  );
+}
+
+function isYuqueDomain(domain: string) {
+  return domain === 'yuque.com' || domain.endsWith('.yuque.com');
+}
+
+function isConfluenceDomain(domain: string) {
+  return domain === 'atlassian.net' || domain.endsWith('.atlassian.net') || domain === 'confluence.atlassian.com';
+}
+
+function getPathSegments(parsedUrl: URL) {
+  return parsedUrl.pathname.split('/').filter(Boolean).map((segment) => segment.trim()).filter(Boolean);
+}
+
+function normalizeContinueUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    const domain = normalizeDomain(parsedUrl.hostname);
+    const filteredParams = new URLSearchParams();
+
+    for (const [key, value] of parsedUrl.searchParams.entries()) {
+      if (CONTINUE_URL_IGNORED_PARAMS.has(key)) {
+        continue;
+      }
+
+      filteredParams.append(key, value);
+    }
+
+    if (isYouTubeDomain(domain)) {
+      const videoId =
+        domain === 'youtu.be'
+          ? parsedUrl.pathname.replace(/^\/+/, '').split('/')[0]
+          : filteredParams.get('v');
+
+      const listId = filteredParams.get('list');
+      const nextParams = new URLSearchParams();
+
+      if (videoId) {
+        nextParams.set('v', videoId);
+      }
+
+      if (listId) {
+        nextParams.set('list', listId);
+      }
+
+      parsedUrl.hostname = 'www.youtube.com';
+      parsedUrl.pathname = '/watch';
+      parsedUrl.search = nextParams.toString() ? `?${nextParams.toString()}` : '';
+      parsedUrl.hash = '';
+      return parsedUrl.toString();
+    }
+
+    parsedUrl.search = filteredParams.toString() ? `?${filteredParams.toString()}` : '';
+    parsedUrl.hash = '';
+    return parsedUrl.toString();
+  } catch {
+    return url.trim();
+  }
+}
+
+function getBilibiliSeriesKey(parsedUrl: URL) {
+  const candidateKeys = ['sid', 'season_id', 'series_id', 'collection_id'];
+
+  for (const key of candidateKeys) {
+    const value = parsedUrl.searchParams.get(key)?.trim();
+
+    if (value) {
+      return `bilibili-series:${key}:${value}`;
+    }
+  }
+
+  const pathnameMatch = parsedUrl.pathname.match(/^\/list\/([^/?#]+)/);
+
+  if (pathnameMatch?.[1]) {
+    return `bilibili-list:${pathnameMatch[1]}`;
+  }
+
+  const videoMatch = parsedUrl.pathname.match(/^\/video\/([^/?#]+)/i);
+
+  if (videoMatch?.[1] && parsedUrl.searchParams.has('p')) {
+    return `bilibili-video:${videoMatch[1].toUpperCase()}`;
+  }
+
+  return null;
+}
+
+function getYouTubeSeriesKey(parsedUrl: URL) {
+  const listId = parsedUrl.searchParams.get('list')?.trim();
+
+  if (listId) {
+    return `youtube-playlist:${listId}`;
+  }
+
+  return null;
+}
+
+function getGitHubGroupKey(parsedUrl: URL) {
+  const pathSegments = getPathSegments(parsedUrl);
+
+  if (pathSegments.length < 2) {
+    return null;
+  }
+
+  const [owner, repo] = pathSegments;
+
+  if (!owner || !repo) {
+    return null;
+  }
+
+  return `github-repo:${owner.toLowerCase()}/${repo.toLowerCase()}`;
+}
+
+function getCourseraGroupKey(parsedUrl: URL) {
+  const pathSegments = getPathSegments(parsedUrl);
+
+  if (pathSegments.length === 0) {
+    return null;
+  }
+
+  if (pathSegments[0] === 'learn' && pathSegments[1]) {
+    return `coursera-course:${pathSegments[1].toLowerCase()}`;
+  }
+
+  if (pathSegments[0] === 'specializations' && pathSegments[1]) {
+    return `coursera-specialization:${pathSegments[1].toLowerCase()}`;
+  }
+
+  if (pathSegments[0] === 'professional-certificates' && pathSegments[1]) {
+    return `coursera-certificate:${pathSegments[1].toLowerCase()}`;
+  }
+
+  if (pathSegments[0] === 'projects' && pathSegments[1]) {
+    return `coursera-project:${pathSegments[1].toLowerCase()}`;
+  }
+
+  return null;
+}
+
+function getEdxGroupKey(parsedUrl: URL) {
+  const pathSegments = getPathSegments(parsedUrl);
+
+  if (pathSegments.length === 0) {
+    return null;
+  }
+
+  if (pathSegments[0] === 'learn' && pathSegments[1]) {
+    return `edx-learn:${pathSegments[1].toLowerCase()}`;
+  }
+
+  if (pathSegments[0] === 'course' && pathSegments[1]) {
+    return `edx-course:${pathSegments[1].toLowerCase()}`;
+  }
+
+  if (pathSegments[0] === 'courses' && pathSegments[1]) {
+    return `edx-courses:${decodeURIComponent(pathSegments[1]).toLowerCase()}`;
+  }
+
+  const courseKey =
+    parsedUrl.searchParams.get('course_id')?.trim() ||
+    parsedUrl.searchParams.get('course')?.trim() ||
+    parsedUrl.searchParams.get('course-v1')?.trim();
+
+  if (courseKey) {
+    return `edx-course:${courseKey.toLowerCase()}`;
+  }
+
+  return null;
+}
+
+function getUdemyGroupKey(parsedUrl: URL) {
+  const pathSegments = getPathSegments(parsedUrl);
+
+  if (pathSegments[0] !== 'course' || !pathSegments[1]) {
+    return null;
+  }
+
+  return `udemy-course:${pathSegments[1].toLowerCase()}`;
+}
+
+function extractNotionPageToken(pathSegments: string[]) {
+  for (let index = pathSegments.length - 1; index >= 0; index -= 1) {
+    const segment = pathSegments[index];
+    const match = segment.match(/([a-f0-9]{32})$/i);
+
+    if (match?.[1]) {
+      return match[1].toLowerCase();
+    }
+  }
+
+  return null;
+}
+
+function getNotionGroupKey(parsedUrl: URL) {
+  const domain = normalizeDomain(parsedUrl.hostname);
+  const pathSegments = getPathSegments(parsedUrl);
+
+  if (domain !== 'notion.so' && pathSegments.length > 0) {
+    return `notion-site:${domain}:${pathSegments[0].toLowerCase()}`;
+  }
+
+  const pageToken = extractNotionPageToken(pathSegments);
+
+  if (pageToken) {
+    return `notion-page:${pageToken}`;
+  }
+
+  if (pathSegments[0]) {
+    return `notion-space:${pathSegments[0].toLowerCase()}`;
+  }
+
+  return null;
+}
+
+function getGoogleDocsGroupInfo(parsedUrl: URL): ContinueGroupInfo | null {
+  const pathSegments = getPathSegments(parsedUrl);
+
+  if (pathSegments[0] !== 'document' && pathSegments[0] !== 'spreadsheets' && pathSegments[0] !== 'presentation') {
+    return null;
+  }
+
+  const documentIdIndex = pathSegments.indexOf('d');
+  const documentId = documentIdIndex >= 0 ? pathSegments[documentIdIndex + 1] : null;
+
+  if (!documentId) {
+    return null;
+  }
+
+  const contextLabelByType: Record<string, string> = {
+    document: 'doc',
+    spreadsheets: 'sheet',
+    presentation: 'slide'
+  };
+
+  return {
+    key: `google-${pathSegments[0]}:${documentId}`,
+    contextLabel: contextLabelByType[pathSegments[0]] ?? 'google'
+  };
+}
+
+function getFigmaGroupInfo(parsedUrl: URL): ContinueGroupInfo | null {
+  const pathSegments = getPathSegments(parsedUrl);
+
+  if (!pathSegments[0] || !pathSegments[1]) {
+    return null;
+  }
+
+  const figmaContextLabelBySection: Record<string, string> = {
+    file: 'figma file',
+    design: 'figma file',
+    proto: 'prototype',
+    board: 'figjam',
+    whiteboard: 'figjam',
+    slides: 'figma slides'
+  };
+  const section = pathSegments[0];
+  const resourceId = pathSegments[1];
+  const contextLabel = figmaContextLabelBySection[section];
+
+  if (!contextLabel) {
+    return null;
+  }
+
+  return {
+    key: `figma:${section}:${resourceId}`,
+    contextLabel
+  };
+}
+
+function getFeishuGroupInfo(parsedUrl: URL): ContinueGroupInfo | null {
+  const pathSegments = getPathSegments(parsedUrl);
+  const contextLabelBySection: Record<string, string> = {
+    docx: 'doc',
+    docs: 'doc',
+    sheet: 'sheet',
+    sheets: 'sheet',
+    base: 'base',
+    wiki: 'wiki',
+    minutes: 'minutes'
+  };
+
+  for (let index = 0; index < pathSegments.length; index += 1) {
+    const section = pathSegments[index];
+    const contextLabel = contextLabelBySection[section];
+    const resourceId = pathSegments[index + 1];
+
+    if (contextLabel && resourceId) {
+      return {
+        key: `feishu:${section}:${resourceId}`,
+        contextLabel
+      };
+    }
+  }
+
+  return null;
+}
+
+function getYuqueGroupInfo(parsedUrl: URL): ContinueGroupInfo | null {
+  const pathSegments = getPathSegments(parsedUrl);
+
+  if (pathSegments.length < 2) {
+    return null;
+  }
+
+  const [namespace, repo] = pathSegments;
+
+  if (!namespace || !repo) {
+    return null;
+  }
+
+  return {
+    key: `yuque-repo:${namespace.toLowerCase()}/${repo.toLowerCase()}`,
+    contextLabel: 'knowledge base'
+  };
+}
+
+function getConfluenceGroupInfo(parsedUrl: URL): ContinueGroupInfo | null {
+  const pathSegments = getPathSegments(parsedUrl);
+  const spacesIndex = pathSegments.indexOf('spaces');
+  const spaceKeyFromPath = spacesIndex >= 0 ? pathSegments[spacesIndex + 1] : null;
+  const spaceKeyFromQuery = parsedUrl.searchParams.get('spaceKey')?.trim();
+  const spaceKey = spaceKeyFromPath || spaceKeyFromQuery;
+
+  if (!spaceKey) {
+    return null;
+  }
+
+  return {
+    key: `confluence-space:${spaceKey.toLowerCase()}`,
+    contextLabel: 'space'
+  };
+}
+
+function getContinueGroupInfo(entry: TimeLogEntry): ContinueGroupInfo {
+  const normalizedUrl = normalizeContinueUrl(entry.url.trim());
+
+  try {
+    const parsedUrl = new URL(normalizedUrl);
+    const domain = normalizeDomain(parsedUrl.hostname);
+
+    if (isYouTubeDomain(domain)) {
+      const playlistKey = getYouTubeSeriesKey(parsedUrl);
+
+      if (playlistKey) {
+        return {
+          key: playlistKey,
+          contextLabel: 'playlist'
+        };
+      }
+    }
+
+    if (isBilibiliDomain(domain)) {
+      const bilibiliSeriesKey = getBilibiliSeriesKey(parsedUrl);
+
+      if (bilibiliSeriesKey) {
+        return {
+          key: bilibiliSeriesKey,
+          contextLabel: 'series'
+        };
+      }
+    }
+
+    if (isGitHubDomain(domain)) {
+      const gitHubGroupKey = getGitHubGroupKey(parsedUrl);
+
+      if (gitHubGroupKey) {
+        return {
+          key: gitHubGroupKey,
+          contextLabel: 'repo'
+        };
+      }
+    }
+
+    if (isCourseraDomain(domain)) {
+      const courseraGroupKey = getCourseraGroupKey(parsedUrl);
+
+      if (courseraGroupKey) {
+        return {
+          key: courseraGroupKey,
+          contextLabel: 'course'
+        };
+      }
+    }
+
+    if (isEdxDomain(domain)) {
+      const edxGroupKey = getEdxGroupKey(parsedUrl);
+
+      if (edxGroupKey) {
+        return {
+          key: edxGroupKey,
+          contextLabel: 'course'
+        };
+      }
+    }
+
+    if (isUdemyDomain(domain)) {
+      const udemyGroupKey = getUdemyGroupKey(parsedUrl);
+
+      if (udemyGroupKey) {
+        return {
+          key: udemyGroupKey,
+          contextLabel: 'course'
+        };
+      }
+    }
+
+    if (isNotionDomain(domain)) {
+      const notionGroupKey = getNotionGroupKey(parsedUrl);
+
+      if (notionGroupKey) {
+        return {
+          key: notionGroupKey,
+          contextLabel: 'workspace'
+        };
+      }
+    }
+
+    if (isGoogleDocsDomain(domain)) {
+      const googleDocsGroupInfo = getGoogleDocsGroupInfo(parsedUrl);
+
+      if (googleDocsGroupInfo) {
+        return googleDocsGroupInfo;
+      }
+    }
+
+    if (isFigmaDomain(domain)) {
+      const figmaGroupInfo = getFigmaGroupInfo(parsedUrl);
+
+      if (figmaGroupInfo) {
+        return figmaGroupInfo;
+      }
+    }
+
+    if (isFeishuDomain(domain)) {
+      const feishuGroupInfo = getFeishuGroupInfo(parsedUrl);
+
+      if (feishuGroupInfo) {
+        return feishuGroupInfo;
+      }
+    }
+
+    if (isYuqueDomain(domain)) {
+      const yuqueGroupInfo = getYuqueGroupInfo(parsedUrl);
+
+      if (yuqueGroupInfo) {
+        return yuqueGroupInfo;
+      }
+    }
+
+    if (isConfluenceDomain(domain)) {
+      const confluenceGroupInfo = getConfluenceGroupInfo(parsedUrl);
+
+      if (confluenceGroupInfo) {
+        return confluenceGroupInfo;
+      }
+    }
+
+    return {
+      key: normalizedUrl,
+      contextLabel: null
+    };
+  } catch {
+    return {
+      key: normalizedUrl,
+      contextLabel: null
+    };
+  }
+}
+
+function getPinnedPageId(value: string) {
   let hash = 0;
 
-  for (let index = 0; index < url.length; index += 1) {
-    hash = (hash * 31 + url.charCodeAt(index)) >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
   }
 
   return `pinned-${hash.toString(36)}`;
 }
 
-function dedupePinnedPagesByUrl(pinnedPages: PinnedPage[]) {
-  const seenUrls = new Set<string>();
+function getPinnedPageIdentity(item: PinnedPage) {
+  return item.pinnedGroupKey ? `group:${item.pinnedGroupKey}` : `url:${item.url}`;
+}
+
+function dedupePinnedPages(pinnedPages: PinnedPage[]) {
+  const seenIdentities = new Set<string>();
   const dedupedPages: PinnedPage[] = [];
 
   for (const item of pinnedPages) {
-    if (!item.url || seenUrls.has(item.url)) {
+    const identity = getPinnedPageIdentity(item);
+
+    if (!item.url || seenIdentities.has(identity)) {
       continue;
     }
 
-    seenUrls.add(item.url);
+    seenIdentities.add(identity);
     dedupedPages.push(item);
   }
 
@@ -92,17 +633,21 @@ function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
 
   for (const entry of entries) {
     const domain = getEntryDomain(entry);
-    const url = entry.url.trim();
+    const url = normalizeContinueUrl(entry.url.trim());
+    const groupInfo = getContinueGroupInfo(entry);
+    const groupKey = groupInfo.key;
 
-    if (!domain || !url) {
+    if (!domain || !url || !groupKey) {
       continue;
     }
 
-    const existing = grouped.get(url);
+    const existing = grouped.get(groupKey);
 
     if (!existing) {
-      grouped.set(url, {
+      grouped.set(groupKey, {
         domain,
+        groupKey,
+        contextLabel: groupInfo.contextLabel,
         title: entry.title,
         duration: entry.duration,
         totalDuration: entry.duration,
@@ -119,6 +664,8 @@ function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
       existing.title = entry.title;
       existing.url = url;
       existing.domain = domain;
+      existing.groupKey = groupKey;
+      existing.contextLabel = groupInfo.contextLabel;
       existing.duration = entry.duration;
     }
   }
@@ -153,7 +700,11 @@ function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
 function syncPinnedPagesWithBookmarks(pinnedPages: PinnedPage[], bookmarks: Array<{ id: string; title: string; url: string; sourcePath: string }>) {
   const bookmarksById = new Map(bookmarks.map((bookmark) => [bookmark.id, bookmark]));
 
-  return dedupePinnedPagesByUrl(pinnedPages.map((item) => {
+  return dedupePinnedPages(pinnedPages.map((item) => {
+    if (item.pinnedGroupKey) {
+      return item;
+    }
+
     const bookmark = bookmarksById.get(item.id);
 
     if (!bookmark) {
@@ -428,7 +979,7 @@ export default function LeftPanel() {
       }
 
       if ('pinnedPages' in changes && Array.isArray(changes.pinnedPages?.newValue)) {
-        setPinnedPages(dedupePinnedPagesByUrl(changes.pinnedPages.newValue as PinnedPage[]));
+        setPinnedPages(dedupePinnedPages(changes.pinnedPages.newValue as PinnedPage[]));
       }
 
       if ('hiddenLeftPanelDomains' in changes && Array.isArray(changes.hiddenLeftPanelDomains?.newValue)) {
@@ -475,21 +1026,23 @@ export default function LeftPanel() {
   };
 
   const handleTogglePinnedPage = async (site: FrequentSite) => {
-    if (pinnedPages.some((item) => item.url === site.url)) {
-      const nextPinnedPages = pinnedPages.filter((item) => item.url !== site.url);
+    if (pinnedPages.some((item) => item.pinnedGroupKey === site.groupKey || (!item.pinnedGroupKey && item.url === site.url))) {
+      const nextPinnedPages = pinnedPages.filter((item) => item.pinnedGroupKey !== site.groupKey && item.url !== site.url);
 
       setPinnedPages(nextPinnedPages);
       await savePinnedPages(nextPinnedPages);
       return;
     }
 
-    const nextPinnedPages = dedupePinnedPagesByUrl([
+    const nextPinnedPages = dedupePinnedPages([
       {
-        id: getPinnedPageId(site.url),
+        id: getPinnedPageId(site.groupKey),
         title: site.title,
         url: site.url,
         sourcePath: site.domain,
-        customName: urlNameCache[site.url]
+        customName: urlNameCache[site.url],
+        pinnedGroupKey: site.groupKey,
+        contextLabel: site.contextLabel
       },
       ...pinnedPages
     ]);
@@ -543,10 +1096,12 @@ export default function LeftPanel() {
       ...urlNameCache
     };
 
-    if (trimmedName) {
-      nextUrlNameCache[target.url] = trimmedName;
-    } else {
-      delete nextUrlNameCache[target.url];
+    if (!target.pinnedGroupKey) {
+      if (trimmedName) {
+        nextUrlNameCache[target.url] = trimmedName;
+      } else {
+        delete nextUrlNameCache[target.url];
+      }
     }
 
     setPinnedPages(nextPinnedPages);
@@ -574,7 +1129,7 @@ export default function LeftPanel() {
 
   const deleteContinuePage = async (site: FrequentSite) => {
     const rawTimeLog = await getRawTimeLog();
-    const nextRawTimeLog = rawTimeLog.filter((entry) => entry.url.trim() !== site.url);
+    const nextRawTimeLog = rawTimeLog.filter((entry) => getContinueGroupInfo(entry).key !== site.groupKey);
     const nextContinuePages = buildContinuePages(nextRawTimeLog);
 
     setContinuePages(nextContinuePages);
@@ -614,10 +1169,22 @@ export default function LeftPanel() {
 
   const getContinueListDisplayName = (item: ContinueListItem) => {
     if (item.pinnedPage) {
-      return getPinnedDisplayName(item.pinnedPage.title, item.pinnedPage.url, item.pinnedPage.customName);
+      return getPinnedDisplayName(item.title, item.url, item.pinnedPage.customName);
     }
 
     return getContinueDisplayName(item);
+  };
+
+  const getContinueListMeta = (item: ContinueListItem) => {
+    if (item.pinnedPage) {
+      if (item.pinnedPage.pinnedGroupKey) {
+        return item.contextLabel ? `${item.contextLabel} • ${item.domain}` : item.domain;
+      }
+
+      return item.pinnedPage.sourcePath ?? item.domain;
+    }
+
+    return item.contextLabel ? `${item.contextLabel} • ${item.domain}` : item.domain;
   };
 
   const getGreeting = () => {
@@ -645,20 +1212,41 @@ export default function LeftPanel() {
   };
 
   const hiddenDomainSet = new Set(hiddenDomains);
-  const visiblePinnedPages = dedupePinnedPagesByUrl(pinnedPages).filter((item) => !hiddenDomainSet.has(getUrlDomain(item.url)));
-  const pinnedUrlSet = new Set(visiblePinnedPages.map((item) => item.url));
-  const pinnedContinueItems: ContinueListItem[] = visiblePinnedPages.map((item) => ({
-    domain: getUrlDomain(item.url) || item.sourcePath || '',
-    title: item.title,
-    duration: 0,
-    totalDuration: 0,
-    lastUsedAt: Number.MAX_SAFE_INTEGER,
-    url: item.url,
-    isPinned: true,
-    pinnedPage: item
-  }));
+  const continuePageByGroupKey = new Map(continuePages.map((site) => [site.groupKey, site]));
+  const visiblePinnedPages = dedupePinnedPages(pinnedPages).filter((item) => {
+    const resolvedSite = item.pinnedGroupKey ? continuePageByGroupKey.get(item.pinnedGroupKey) : null;
+    const resolvedDomain = resolvedSite?.domain || getUrlDomain(item.url) || item.sourcePath || '';
+
+    return !hiddenDomainSet.has(normalizeDomain(resolvedDomain));
+  });
+  const pinnedUrlSet = new Set(
+    visiblePinnedPages
+      .map((item) => (item.pinnedGroupKey ? continuePageByGroupKey.get(item.pinnedGroupKey)?.url : item.url))
+      .filter((value): value is string => Boolean(value))
+  );
+  const pinnedGroupSet = new Set(
+    visiblePinnedPages
+      .map((item) => item.pinnedGroupKey)
+      .filter((value): value is string => Boolean(value))
+  );
+  const pinnedContinueItems: ContinueListItem[] = visiblePinnedPages.map((item) => {
+    const resolvedSite = item.pinnedGroupKey ? continuePageByGroupKey.get(item.pinnedGroupKey) : null;
+
+    return {
+      domain: resolvedSite?.domain || getUrlDomain(item.url) || item.sourcePath || '',
+      groupKey: item.pinnedGroupKey || normalizeContinueUrl(item.url),
+      contextLabel: resolvedSite?.contextLabel ?? item.contextLabel ?? null,
+      title: resolvedSite?.title || item.title,
+      duration: resolvedSite?.duration ?? 0,
+      totalDuration: resolvedSite?.totalDuration ?? 0,
+      lastUsedAt: resolvedSite?.lastUsedAt ?? Number.MAX_SAFE_INTEGER,
+      url: resolvedSite?.url || item.url,
+      isPinned: true,
+      pinnedPage: item
+    };
+  });
   const visibleContinuePages: ContinueListItem[] = continuePages
-    .filter((site) => !hiddenDomainSet.has(normalizeDomain(site.domain)) && !pinnedUrlSet.has(site.url))
+    .filter((site) => !hiddenDomainSet.has(normalizeDomain(site.domain)) && !pinnedUrlSet.has(site.url) && !pinnedGroupSet.has(site.groupKey))
     .map((site) => ({
       ...site,
       isPinned: false
@@ -712,7 +1300,7 @@ export default function LeftPanel() {
                       }
                     />
                     <span className="left-item-meta">
-                      {site.pinnedPage?.sourcePath ?? site.domain}
+                      {getContinueListMeta(site)}
                     </span>
                   </span>
                 ) : (
@@ -729,7 +1317,7 @@ export default function LeftPanel() {
                         >
                           {getContinueListDisplayName(site)}
                         </span>
-                        <span className="left-item-meta">{site.pinnedPage?.sourcePath ?? site.domain}</span>
+                        <span className="left-item-meta">{getContinueListMeta(site)}</span>
                       </span>
                     </span>
                   </button>

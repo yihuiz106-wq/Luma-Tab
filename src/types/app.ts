@@ -25,6 +25,8 @@ export interface PinnedPage {
   url: string;
   sourcePath?: string;
   customName?: string;
+  pinnedGroupKey?: string;
+  contextLabel?: string | null;
 }
 
 export interface UiSettings {

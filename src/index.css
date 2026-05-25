@@ -480,22 +480,36 @@ body {
 }
 
 .pin-icon-button.active {
-  border-color: rgba(111, 143, 122, 0.34);
+  border-color: var(--glass-highlight-border);
   background: rgba(111, 143, 122, 0.14);
   color: var(--accent-text);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.44),
-    0 0 0 1px rgba(111, 143, 122, 0.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 0 0 2px var(--glass-highlight-ring),
+    0 6px 16px var(--glass-highlight-shadow);
+}
+
+.pin-icon-button:hover,
+.pin-icon-button:focus-visible {
+  border-color: var(--glass-highlight-border);
+  background: var(--glass-highlight-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 0 0 2px var(--glass-highlight-ring),
+    0 6px 16px var(--glass-highlight-shadow);
 }
 
 .pin-icon-button.active:hover,
 .pin-icon-button.active:focus-visible {
-  border-color: rgba(111, 143, 122, 0.4);
+  border-color: var(--glass-highlight-border);
   background: rgba(111, 143, 122, 0.15);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
-    0 0 0 2px rgba(255, 255, 255, 0.36),
-    0 6px 16px rgba(111, 143, 122, 0.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 0 0 2px var(--glass-highlight-ring),
+    0 6px 16px var(--glass-highlight-shadow);
 }
 
 .pin-icon-button svg {
@@ -676,6 +690,7 @@ body {
 }
 
 .left-time-card {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -684,6 +699,7 @@ body {
   padding: 14px 18px;
   border: 1px solid rgba(255, 255, 255, 0.46);
   border-radius: 14px;
+  overflow: hidden;
   background:
     radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.5), transparent 34%),
     rgba(255, 255, 255, 0.22);
@@ -691,6 +707,38 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
     inset 0 -1px 0 rgba(213, 203, 189, 0.08),
     0 10px 26px rgba(15, 23, 42, 0.026);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.left-time-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.28), transparent 26%),
+    linear-gradient(115deg, rgba(255, 255, 255, 0.18), transparent 34%, transparent 62%, rgba(255, 255, 255, 0.08));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.left-time-card:hover,
+.left-time-card:focus-within {
+  background:
+    radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.62), transparent 34%),
+    rgba(255, 255, 255, 0.36);
+  border-color: rgba(255, 255, 255, 0.56);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(213, 203, 189, 0.08),
+    0 8px 22px rgba(15, 23, 42, 0.032);
+}
+
+.left-time-card:hover::after,
+.left-time-card:focus-within::after {
+  opacity: 1;
 }
 
 .left-time-copy {
