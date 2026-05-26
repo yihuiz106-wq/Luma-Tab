@@ -38,6 +38,7 @@ interface ContinueListItem extends FrequentSite {
 }
 
 const MIN_CONTINUE_DURATION = 3 * 60 * 1000;
+const CONTINUE_LIST_LIMIT = 8;
 const CONTINUE_SCORE_DURATION_CAP = 3 * 60 * 60 * 1000;
 const CONTINUE_RECENCY_WEIGHT = 0.75;
 const CONTINUE_DURATION_WEIGHT = 0.25;
@@ -626,6 +627,10 @@ function dedupePinnedPages(pinnedPages: PinnedPage[]) {
   return dedupedPages;
 }
 
+function limitPinnedPages(pinnedPages: PinnedPage[]) {
+  return dedupePinnedPages(pinnedPages).slice(0, CONTINUE_LIST_LIMIT);
+}
+
 function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
   const grouped = new Map<string, FrequentSite>();
   const now = Date.now();
@@ -693,14 +698,13 @@ function buildContinuePages(entries: TimeLogEntry[]): FrequentSite[] {
       }
 
       return b.totalDuration - a.totalDuration;
-    })
-    .slice(0, 6);
+    });
 }
 
 function syncPinnedPagesWithBookmarks(pinnedPages: PinnedPage[], bookmarks: Array<{ id: string; title: string; url: string; sourcePath: string }>) {
   const bookmarksById = new Map(bookmarks.map((bookmark) => [bookmark.id, bookmark]));
 
-  return dedupePinnedPages(pinnedPages.map((item) => {
+  return limitPinnedPages(pinnedPages.map((item) => {
     if (item.pinnedGroupKey) {
       return item;
     }
@@ -979,7 +983,7 @@ export default function LeftPanel() {
       }
 
       if ('pinnedPages' in changes && Array.isArray(changes.pinnedPages?.newValue)) {
-        setPinnedPages(dedupePinnedPages(changes.pinnedPages.newValue as PinnedPage[]));
+        setPinnedPages(limitPinnedPages(changes.pinnedPages.newValue as PinnedPage[]));
       }
 
       if ('hiddenLeftPanelDomains' in changes && Array.isArray(changes.hiddenLeftPanelDomains?.newValue)) {
@@ -1034,7 +1038,11 @@ export default function LeftPanel() {
       return;
     }
 
-    const nextPinnedPages = dedupePinnedPages([
+    if (dedupePinnedPages(pinnedPages).length >= CONTINUE_LIST_LIMIT) {
+      return;
+    }
+
+    const nextPinnedPages = limitPinnedPages([
       {
         id: getPinnedPageId(site.groupKey),
         title: site.title,
@@ -1213,12 +1221,14 @@ export default function LeftPanel() {
 
   const hiddenDomainSet = new Set(hiddenDomains);
   const continuePageByGroupKey = new Map(continuePages.map((site) => [site.groupKey, site]));
-  const visiblePinnedPages = dedupePinnedPages(pinnedPages).filter((item) => {
-    const resolvedSite = item.pinnedGroupKey ? continuePageByGroupKey.get(item.pinnedGroupKey) : null;
-    const resolvedDomain = resolvedSite?.domain || getUrlDomain(item.url) || item.sourcePath || '';
+  const visiblePinnedPages = dedupePinnedPages(pinnedPages)
+    .filter((item) => {
+      const resolvedSite = item.pinnedGroupKey ? continuePageByGroupKey.get(item.pinnedGroupKey) : null;
+      const resolvedDomain = resolvedSite?.domain || getUrlDomain(item.url) || item.sourcePath || '';
 
-    return !hiddenDomainSet.has(normalizeDomain(resolvedDomain));
-  });
+      return !hiddenDomainSet.has(normalizeDomain(resolvedDomain));
+    })
+    .slice(0, CONTINUE_LIST_LIMIT);
   const pinnedUrlSet = new Set(
     visiblePinnedPages
       .map((item) => (item.pinnedGroupKey ? continuePageByGroupKey.get(item.pinnedGroupKey)?.url : item.url))
@@ -1251,7 +1261,7 @@ export default function LeftPanel() {
       ...site,
       isPinned: false
     }));
-  const visibleContinueItems = [...pinnedContinueItems, ...visibleContinuePages];
+  const visibleContinueItems = [...pinnedContinueItems, ...visibleContinuePages].slice(0, CONTINUE_LIST_LIMIT);
   const timeText = currentDate.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit'
